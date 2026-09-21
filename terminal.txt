@@ -1,0 +1,174 @@
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python data_utils.py
+Generando datos sintéticos para verificación...
+
+Resultados de la generación:
+Forma de X: (100000, 301) (Esperado: 100000, 301)
+Forma de y: (100000,) (Esperado: 100000,)
+Forma de beta*: (301,) (Esperado: 301,)
+
+¡Etapa 1 completada con éxito!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_sklearn.py
+Generando datos...
+Entrenando el modelo de scikit-learn...
+
+¡Entrenamiento completado!
+Tiempo de ejecución: 1.7467 segundos
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_auto.py
+Generando datos...
+Calculando la Ecuación Normal con NumPy...
+
+¡Cálculo completado!
+Tiempo de ejecución NumPy: 0.1199 segundos
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_auto.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con BaggingRegressor (n_jobs=2)...
+
+¡Cálculo completado en 96.4040 segundos!
+Forma de la matriz de coeficientes estimados: (48, 301) (Esperado: 48, 301)
+
+Comprobación para beta_0:
+Valor verdadero (beta*): 0.4967
+Intervalo 95%: [0.4914, 0.5045]
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python -c "import os; print(f'Tienes {os.cpu_count()} núcleos lógicos.')"
+Tienes 8 núcleos lógicos.
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_sklearn.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con joblib.Parallel (n_jobs=2)...
+
+¡Cálculo completado en 86.8323 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=2)...
+
+¡Cálculo completado en 10.8812 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+=== Información de Threadpool (NumPy) ===
+Librería: libmkl_rt.so.2
+Threads internos por defecto: 4
+=========================================
+
+Generando datos... (p=8, B=48)
+Ejecutando Bootstrapping con NumPy (n_jobs=8)...
+
+¡Cálculo completado en 11.7598 segundos!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=2)...
+
+¡Cálculo completado en 11.8987 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=2)...
+
+¡Cálculo completado en 9.4333 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=2)...
+
+¡Cálculo completado en 10.1064 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=2, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=2)...
+
+¡Cálculo completado en 10.2309 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+=== Información de Threadpool (NumPy) ===
+Librería: libmkl_rt.so.2
+Threads internos por defecto: 4
+=========================================
+
+Generando datos... (p=8, B=48)
+Ejecutando Bootstrapping con NumPy (n_jobs=8)...
+
+¡Cálculo completado en 11.4198 segundos!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=8, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=8)...
+
+¡Cálculo completado en 11.4733 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=4, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=4)...
+
+¡Cálculo completado en 9.2635 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+Generando datos... (p=5, B=48)
+Ejecutando Bootstrapping con NumPy puro (n_jobs=5)...
+
+¡Cálculo completado en 10.3670 segundos!
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+=== Información de Threadpool (NumPy) ===
+Librería: libmkl_rt.so.2
+Threads internos por defecto: 4
+=========================================
+
+Generando datos... (p=8, B=48)
+Ejecutando Bootstrapping con NumPy (n_jobs=8)...
+
+¡Cálculo completado en 11.8307 segundos!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python bs_numpy.py
+=== Información de Threadpool (NumPy) ===
+Librería: libmkl_rt.so.2
+Threads internos por defecto: 4
+=========================================
+
+Generando datos... (p=8, B=48)
+Ejecutando Bootstrapping con NumPy (n_jobs=8) y limits=1...
+
+¡Cálculo completado en 11.2385 segundos!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python run_experiments.py
+p     | bs_auto (s)  | bs_sklearn (s) | bs_numpy (s)
+--------------------------------------------------
+1     | 69.2833      | 73.9687        | 15.7541
+2     | 90.7603      | 85.7084        | 12.4001
+3     | 93.5284      | 88.7284        | 11.7562
+4     | 93.9300      | 95.5299        | 12.4507
+5     | 77.6713      | 76.6672        | 13.7518
+6     | 80.0480      | 78.3546        | 14.1591
+7     | 79.3188      | 76.5878        | 14.2833
+8     | 80.9387      | 82.5302        | 15.1046
+
+¡Experimentos completados y guardados en 'benchmark_results.npy'!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python plot_metrics.py
+qt.qpa.plugin: Could not find the Qt platform plugin "wayland" in ""
+qt.qpa.plugin: From 6.5.0, xcb-cursor0 or libxcb-cursor0 is needed to load the Qt xcb platform plugin.
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
+This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
+
+Available platform plugins are: minimal, eglfs, vnc, linuxfb, offscreen, xcb, minimalegl.
+
+Aborted (core dumped)
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python plot_metrics.py
+¡Gráficos generados y guardados exitosamente como 'graficos_metricas.png'!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python plot_metrics.py
+/home/bruno/universidad/IIC3533/Tareas/T1/plot_metrics.py:72: SyntaxWarning: invalid escape sequence '\c'
+  plt.title('Overhead $T_o(p) = p \cdot T(p) - T(1)$', fontsize=14)
+¡Gráficos generados y guardados exitosamente como 'graficos_metricas.png'!
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python run_grid_experiment.py
+Traceback (most recent call last):
+  File "/home/bruno/universidad/IIC3533/Tareas/T1/run_grid_experiment.py", line 6, in <module>
+    import seaborn as sns
+ModuleNotFoundError: No module named 'seaborn'
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python run_grid_experiment.py
+Traceback (most recent call last):
+  File "/home/bruno/universidad/IIC3533/Tareas/T1/run_grid_experiment.py", line 6, in <module>
+    import seaborn as sns
+ModuleNotFoundError: No module named 'seaborn'
+(tareal-hpc) bruno@DESKTOP-52S4V2O:~/universidad/IIC3533/Tareas/T1$ python run_grid_experiment.py
+t \ p    | p=1    | p=2    | p=4    | p=8
+---------------------------------------------
+t=1      | 15.95  | 10.69  | 11.61  | 13.47  |
+t=2      | 14.23  | 11.74  | 11.62  | 12.79  |
+t=4      | 11.14  | 12.80  | 11.14  | 11.76  |
+t=8      | 11.69  | 11.44  | 11.40  | 13.40  |
+
+¡Matriz completada y mapa de calor guardado como 'grid_heatmap.png'!
