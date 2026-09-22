@@ -3,11 +3,19 @@ Utilidades compartidas por los scripts de experimentos.
 
 El objetivo es que correr los benchmarks en la segunda máquina no sobrescriba
 los resultados de la primera: todas las salidas se guardan bajo
-resultados/<etiqueta>/, donde <etiqueta> es por defecto el hostname.
+<raíz del repo>/resultados/<etiqueta>/, donde <etiqueta> es por defecto el
+hostname.
+
+Las rutas se anclan a la raíz del repositorio (no al directorio de trabajo), así
+que da lo mismo si los scripts se lanzan desde la raíz o desde src/.
 """
 import os
 import socket
 from pathlib import Path
+
+# src/config.py → src/ → raíz del repo
+RAIZ = Path(__file__).resolve().parent.parent
+RESULTADOS = RAIZ / "resultados"
 
 
 def etiqueta_maquina():
@@ -17,7 +25,7 @@ def etiqueta_maquina():
 
 def carpeta_resultados(etiqueta=None):
     """Crea (si no existe) y devuelve resultados/<etiqueta>/."""
-    carpeta = Path("resultados") / (etiqueta or etiqueta_maquina())
+    carpeta = RESULTADOS / (etiqueta or etiqueta_maquina())
     carpeta.mkdir(parents=True, exist_ok=True)
     return carpeta
 
@@ -73,4 +81,5 @@ def describir_entorno():
 
 if __name__ == "__main__":
     print(describir_entorno())
-    print(f"\nSalidas irán a: {carpeta_resultados()}")
+    print(f"\nRaíz del repo:  {RAIZ}")
+    print(f"Salidas irán a: {carpeta_resultados()}")

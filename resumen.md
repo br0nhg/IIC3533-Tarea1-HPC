@@ -28,17 +28,17 @@
 ## 2. Tareas realizadas
 
 ### Ítem (a) — Generación de datos ✅
-[data_utils.py](data_utils.py) cumple al pie de la letra: `np.random.seed(42)`, luego β* ~ N(0,1) de tamaño k+1, X de N×k desde N(0,1), `np.hstack` con la columna de unos, y = Xβ* + ruido N(0,1). Formas verificadas: X (100000, 301), y (100000,), β* (301,).
+[data_utils.py](src/data_utils.py) cumple al pie de la letra: `np.random.seed(42)`, luego β* ~ N(0,1) de tamaño k+1, X de N×k desde N(0,1), `np.hstack` con la columna de unos, y = Xβ* + ruido N(0,1). Formas verificadas: X (100000, 301), y (100000,), β* (301,).
 
 ### Ítem (b) — Tres implementaciones ✅ (código)
-- [bs_auto.py](bs_auto.py): `BaggingRegressor(estimator=LinearRegression(fit_intercept=False), n_estimators=48, n_jobs=p, bootstrap=True, max_samples=1.0)`. Extrae los coeficientes de `estimators_` y calcula percentiles.
-- [bs_sklearn.py](bs_sklearn.py): `Parallel(n_jobs=p)` sobre una tarea que sortea índices, indexa y ajusta `LinearRegression`. Calcula e imprime el intervalo.
-- [bs_numpy.py](bs_numpy.py): misma estructura, pero resuelve `np.linalg.solve(XᵀX, Xᵀy)`. Además imprime `threadpool_info()`.
+- [bs_auto.py](src/bs_auto.py): `BaggingRegressor(estimator=LinearRegression(fit_intercept=False), n_estimators=48, n_jobs=p, bootstrap=True, max_samples=1.0)`. Extrae los coeficientes de `estimators_` y calcula percentiles.
+- [bs_sklearn.py](src/bs_sklearn.py): `Parallel(n_jobs=p)` sobre una tarea que sortea índices, indexa y ajusta `LinearRegression`. Calcula e imprime el intervalo.
+- [bs_numpy.py](src/bs_numpy.py): misma estructura, pero resuelve `np.linalg.solve(XᵀX, Xᵀy)`. Además imprime `threadpool_info()`.
 
 Las tres usan `fit_intercept=False` (correcto: X ya trae la columna de unos) y semilla `42 + b` por resample.
 
 ### Ítems (f), (g), (h) — Benchmark y gráficos 🟡 (solo máquina 1)
-[run_experiments.py](run_experiments.py) corrió p = 1..8 en la máquina 1. Resultados guardados en `benchmark_results.npy`:
+[run_experiments.py](src/run_experiments.py) corrió p = 1..8 en la máquina 1. Resultados guardados en `benchmark_results.npy`:
 
 | p | bs_auto (s) | bs_sklearn (s) | bs_numpy (s) |
 |---|---|---|---|

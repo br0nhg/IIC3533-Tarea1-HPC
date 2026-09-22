@@ -2,11 +2,17 @@
 # Corre la tanda completa de experimentos de la Tarea 1 y deja TODO registrado
 # en resultados/<maquina>/terminal.txt.
 #
+# Se puede invocar desde cualquier directorio.
+#
 #   bash correr_todo.sh              # usa el hostname como etiqueta
 #   MAQUINA=bruno bash correr_todo.sh
 #   bash correr_todo.sh --prueba     # versión rápida (~1 min) para verificar
 #                                    # que el entorno funciona antes de la real
 set -u
+
+# Trabajar siempre desde la raíz del repo, sin importar desde dónde se invoque.
+cd "$(dirname "$(readlink -f "$0")")"
+SRC=src
 
 PRUEBA=""
 if [ "${1:-}" = "--prueba" ]; then
@@ -46,7 +52,7 @@ echo "########################################################################"
 
 echo
 echo "### Entorno ###"
-$PY config.py
+$PY $SRC/config.py
 echo
 echo "--- CPU ---"
 lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket" \
@@ -73,7 +79,7 @@ paso () {
 
 # (c) correctitud y reproducibilidad
 paso "(c) Verificación de correctitud y reproducibilidad" \
-    $PY verificar_correctitud.py $PRUEBA
+    $PY $SRC/verificar_correctitud.py $PRUEBA
 
 # (e) oversubscription: threads vistos dentro de los workers
 echo
@@ -81,30 +87,30 @@ echo "########################################################################"
 echo "# (e) Oversubscription — threads BLAS dentro de los workers"
 echo "# >>> DEJAR EL MONITOR DEL SISTEMA ABIERTO Y SACAR CAPTURA ACÁ <<<"
 echo "########################################################################"
-PMAX=$($PY -c "from config import cores_logicos; print(cores_logicos())")
+PMAX=$($PY -c "import sys; sys.path.insert(0, '$SRC'); from config import cores_logicos; print(cores_logicos())")
 for T in 1 2 4; do
     echo
     echo "--- p=$PMAX, t=$T ---"
-    $PY bs_numpy.py -p "$PMAX" -t "$T" $PRUEBA
+    $PY $SRC/bs_numpy.py -p "$PMAX" -t "$T" $PRUEBA
 done
 
 # (b) comparación de las dos variantes de bs_numpy
 paso "(b) bs_numpy con índices (versión del enunciado)" \
-    $PY bs_numpy.py -p "$PMAX" -t 1 $PRUEBA
+    $PY $SRC/bs_numpy.py -p "$PMAX" -t 1 $PRUEBA
 paso "(b) bs_numpy con pesos (variante optimizada)" \
-    $PY bs_numpy.py -p "$PMAX" -t 1 --pesos $PRUEBA
+    $PY $SRC/bs_numpy.py -p "$PMAX" -t 1 --pesos $PRUEBA
 
 # (f)(g)(h) benchmark de las tres versiones
 paso "(f)(g)(h) Benchmark p = 1..$PMAX de las tres versiones" \
-    $PY run_experiments.py $PRUEBA
+    $PY $SRC/run_experiments.py $PRUEBA
 
 # (i) grilla (p, t)
 paso "(i) Grilla (p, t) con p*t <= $PMAX" \
-    $PY run_grid_experiment.py $PRUEBA
+    $PY $SRC/run_grid_experiment.py $PRUEBA
 
 # (g)(h) gráficos
 paso "(g)(h) Gráficos T(p), S(p), E(p) y overhead" \
-    $PY plot_metrics.py
+    $PY $SRC/plot_metrics.py
 
 echo
 echo "########################################################################"
