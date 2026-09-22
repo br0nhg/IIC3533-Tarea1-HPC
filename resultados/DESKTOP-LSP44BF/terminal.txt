@@ -1,0 +1,308 @@
+########################################################################
+# Tarea 1 HPC — tanda completa
+# Máquina: DESKTOP-LSP44BF
+# Fecha:   2026-09-22T20:05:16-03:00
+########################################################################
+
+### Entorno ###
+Máquina:        DESKTOP-LSP44BF
+Cores lógicos:  12
+NumPy:          2.5.2
+joblib:         1.5.3
+threadpoolctl:  3.5.0
+BLAS:           mkl 2025.0-Product (6 threads por defecto)
+
+Raíz del repo:  /home/bruno/Universidad/IIC3533/Tareas/T1/IIC3533-Tarea1-HPC
+Salidas irán a: /home/bruno/Universidad/IIC3533/Tareas/T1/IIC3533-Tarea1-HPC/resultados/DESKTOP-LSP44BF
+
+--- CPU ---
+CPU(s):                                  12
+Model name:                              AMD Ryzen 5 3600X 6-Core Processor
+Thread(s) per core:                      2
+Core(s) per socket:                      6
+--- Memoria ---
+               total        used        free      shared  buff/cache   available
+Mem:            11Gi       556Mi        10Gi       3.0Mi       628Mi        11Gi
+Swap:          4.0Gi          0B       4.0Gi
+--- Python ---
+Python 3.13.15
+
+########################################################################
+# (c) Verificación de correctitud y reproducibilidad
+########################################################################
+Parámetros: N=100000, k=300, B=48, p=12
+
+==============================================================================
+1. Intervalos de confianza al 95 % y cobertura de beta*
+==============================================================================
+bs_numpy       | beta_0 ∈ [+0.4925, +0.5043] | ancho medio 0.01142 | cobertura de beta*: 91.4%
+bs_sklearn     | beta_0 ∈ [+0.4925, +0.5043] | ancho medio 0.01142 | cobertura de beta*: 91.4%
+bs_numpy(pesos) | beta_0 ∈ [+0.4925, +0.5043] | ancho medio 0.01142 | cobertura de beta*: 91.4%
+Generando datos... (p=12, B=48)
+Ejecutando Bootstrapping con BaggingRegressor (n_jobs=12)...
+
+¡Cálculo completado en 44.9830 segundos!
+Forma de la matriz de coeficientes estimados: (48, 301) (Esperado: 48, 301)
+
+Comprobación para beta_0:
+Valor verdadero (beta*): 0.4967
+Intervalo 95%: [0.4902, 0.5018]
+Cobertura de beta* por los intervalos: 91.7%
+bs_auto        | beta_0 ∈ [+0.4902, +0.5018] | ancho medio 0.01141 | cobertura de beta*: 91.7%
+
+==============================================================================
+2. Equivalencia entre versiones
+==============================================================================
+máx |bs_numpy - bs_sklearn|        = 1.532e-13  (mismas filas remuestreadas → deben coincidir salvo redondeo)
+máx |bs_numpy - bs_numpy(pesos)|   = 1.270e-13  (mismo resample, distinto orden de suma en punto flotante)
+máx dif. de extremos vs bs_auto    = 4.616e-03  (RNG interno distinto → equivalencia solo estadística)
+
+==============================================================================
+3. Reproducibilidad entre ejecuciones
+==============================================================================
+bs_numpy repetido:  máx dif. = 0.000e+00 → REPRODUCIBLE
+Generando datos... (p=12, B=48)
+Ejecutando Bootstrapping con BaggingRegressor (n_jobs=12)...
+
+¡Cálculo completado en 44.8516 segundos!
+Forma de la matriz de coeficientes estimados: (48, 301) (Esperado: 48, 301)
+
+Comprobación para beta_0:
+Valor verdadero (beta*): 0.4967
+Intervalo 95%: [0.4902, 0.5018]
+Cobertura de beta* por los intervalos: 91.7%
+bs_auto repetido:   máx dif. = 0.000e+00 → REPRODUCIBLE
+
+(bs_auto solo es reproducible porque se le fijó random_state=42;
+ sin ese argumento cambia en cada ejecución.)
+
+==============================================================================
+Primeros 5 coeficientes: intervalo de bs_numpy vs beta* verdadero
+==============================================================================
+j    |   beta*_j |  límite inf |  límite sup | cubre
+0    |    0.4967 |      0.4925 |      0.5043 | sí
+1    |   -0.1383 |     -0.1400 |     -0.1286 | sí
+2    |    0.6477 |      0.6398 |      0.6524 | sí
+3    |    1.5230 |      1.5206 |      1.5305 | sí
+4    |   -0.2342 |     -0.2393 |     -0.2290 | sí
+[duración: 203 s]
+
+########################################################################
+# (e) Oversubscription — threads BLAS dentro de los workers
+# >>> DEJAR EL MONITOR DEL SISTEMA ABIERTO Y SACAR CAPTURA ACÁ <<<
+########################################################################
+
+--- p=12, t=1 ---
+=== Threads BLAS en el proceso padre (por defecto) ===
+  mkl 2025.0-Product: 6 threads
+  cores lógicos de la máquina: 12
+
+Generando datos... (p=12, B=48, t=1, variante=índices)
+
+=== Threads BLAS vistos dentro de los workers (t=1) ===
+  worker 0: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 1: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 2: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 3: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  sin limitar: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+  con t=1: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+
+Ejecutando bootstrapping (n_jobs=12, threads internos=1)...
+
+¡Cálculo completado en 6.9072 segundos!
+Forma de la matriz de coeficientes: (48, 301) (Esperado: 48, 301)
+
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+Cobertura de beta* por los intervalos: 91.4%
+
+--- p=12, t=2 ---
+=== Threads BLAS en el proceso padre (por defecto) ===
+  mkl 2025.0-Product: 6 threads
+  cores lógicos de la máquina: 12
+
+Generando datos... (p=12, B=48, t=2, variante=índices)
+
+=== Threads BLAS vistos dentro de los workers (t=2) ===
+  worker 0: al arrancar [('mkl', 1)] → dentro de threadpool_limits(2) [('mkl', 2)]
+  worker 1: al arrancar [('mkl', 1)] → dentro de threadpool_limits(2) [('mkl', 2)]
+  worker 2: al arrancar [('mkl', 1)] → dentro de threadpool_limits(2) [('mkl', 2)]
+  worker 3: al arrancar [('mkl', 1)] → dentro de threadpool_limits(2) [('mkl', 2)]
+  sin limitar: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+  con t=2: 12 procesos x 2 threads = 24 sobre 12 cores lógicos  [OVERSUBSCRIPTION]
+
+Ejecutando bootstrapping (n_jobs=12, threads internos=2)...
+
+¡Cálculo completado en 8.9838 segundos!
+Forma de la matriz de coeficientes: (48, 301) (Esperado: 48, 301)
+
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+Cobertura de beta* por los intervalos: 91.4%
+
+--- p=12, t=4 ---
+=== Threads BLAS en el proceso padre (por defecto) ===
+  mkl 2025.0-Product: 6 threads
+  cores lógicos de la máquina: 12
+
+Generando datos... (p=12, B=48, t=4, variante=índices)
+
+=== Threads BLAS vistos dentro de los workers (t=4) ===
+  worker 0: al arrancar [('mkl', 1)] → dentro de threadpool_limits(4) [('mkl', 4)]
+  worker 1: al arrancar [('mkl', 1)] → dentro de threadpool_limits(4) [('mkl', 4)]
+  worker 2: al arrancar [('mkl', 1)] → dentro de threadpool_limits(4) [('mkl', 4)]
+  worker 3: al arrancar [('mkl', 1)] → dentro de threadpool_limits(4) [('mkl', 4)]
+  sin limitar: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+  con t=4: 12 procesos x 4 threads = 48 sobre 12 cores lógicos  [OVERSUBSCRIPTION]
+
+Ejecutando bootstrapping (n_jobs=12, threads internos=4)...
+
+¡Cálculo completado en 19.0954 segundos!
+Forma de la matriz de coeficientes: (48, 301) (Esperado: 48, 301)
+
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+Cobertura de beta* por los intervalos: 91.4%
+
+########################################################################
+# (b) bs_numpy con índices (versión del enunciado)
+########################################################################
+=== Threads BLAS en el proceso padre (por defecto) ===
+  mkl 2025.0-Product: 6 threads
+  cores lógicos de la máquina: 12
+
+Generando datos... (p=12, B=48, t=1, variante=índices)
+
+=== Threads BLAS vistos dentro de los workers (t=1) ===
+  worker 0: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 1: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 2: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 3: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  sin limitar: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+  con t=1: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+
+Ejecutando bootstrapping (n_jobs=12, threads internos=1)...
+
+¡Cálculo completado en 6.6233 segundos!
+Forma de la matriz de coeficientes: (48, 301) (Esperado: 48, 301)
+
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+Cobertura de beta* por los intervalos: 91.4%
+[duración: 8 s]
+
+########################################################################
+# (b) bs_numpy con pesos (variante optimizada)
+########################################################################
+=== Threads BLAS en el proceso padre (por defecto) ===
+  mkl 2025.0-Product: 6 threads
+  cores lógicos de la máquina: 12
+
+Generando datos... (p=12, B=48, t=1, variante=pesos)
+
+=== Threads BLAS vistos dentro de los workers (t=1) ===
+  worker 0: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 1: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 2: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  worker 3: al arrancar [('mkl', 1)] → dentro de threadpool_limits(1) [('mkl', 1)]
+  sin limitar: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+  con t=1: 12 procesos x 1 threads = 12 sobre 12 cores lógicos
+
+Ejecutando bootstrapping (n_jobs=12, threads internos=1)...
+
+¡Cálculo completado en 8.7607 segundos!
+Forma de la matriz de coeficientes: (48, 301) (Esperado: 48, 301)
+
+Intervalo 95% beta_0: [0.4925, 0.5043] (Verdadero: 0.4967)
+Cobertura de beta* por los intervalos: 91.4%
+[duración: 11 s]
+
+########################################################################
+# (f)(g)(h) Benchmark p = 1..12 de las tres versiones
+########################################################################
+Máquina:        DESKTOP-LSP44BF
+Cores lógicos:  12
+NumPy:          2.5.2
+joblib:         1.5.3
+threadpoolctl:  3.5.0
+BLAS:           mkl 2025.0-Product (6 threads por defecto)
+
+Benchmark: B=48, p=1..12, threads internos t=1
+
+Midiendo líneas base secuenciales (sin joblib, BLAS libre)...
+  serial numpy:   35.3448 s
+  serial sklearn: 42.9304 s
+
+p     | bs_auto (s)  | bs_sklearn (s) | bs_numpy (s)
+----------------------------------------------------
+1     | 41.3885      | 56.7914        | 25.2511     
+2     | 56.6962      | 51.3502        | 15.8842     
+3     | 54.7941      | 43.2294        | 10.9330     
+4     | 40.6098      | 37.2598        | 9.3867      
+5     | 52.9617      | 40.0424        | 9.2596      
+6     | 51.6580      | 41.4538        | 8.4024      
+7     | 47.7981      | 43.2506        | 8.3683      
+8     | 41.9086      | 37.3996        | 7.1867      
+9     | 41.7347      | 39.9781        | 7.6365      
+10    | 42.5823      | 41.2428        | 7.2864      
+11    | 44.1138      | 44.4594        | 7.2812      
+12    | 42.5692      | 42.1815        | 7.1872      
+
+¡Experimentos completados y guardados en /home/bruno/Universidad/IIC3533/Tareas/T1/IIC3533-Tarea1-HPC/resultados/DESKTOP-LSP44BF/!
+[duración: 1284 s]
+
+########################################################################
+# (i) Grilla (p, t) con p*t <= 12
+########################################################################
+Máquina:        DESKTOP-LSP44BF
+Cores lógicos:  12
+NumPy:          2.5.2
+joblib:         1.5.3
+threadpoolctl:  3.5.0
+BLAS:           mkl 2025.0-Product (6 threads por defecto)
+
+Grilla (p, t) con restricción p*t <= 12
+
+t \ p    | p=1     | p=2     | p=4     | p=8     | p=12   
+-------------------------------------------------------
+t=1      | 24.22  | 14.38  | 9.20   | 7.59   | 7.77   | 
+t=2      | 19.11  | 14.21  | 9.73   | --     | --     | 
+t=4      | 29.15  | 21.83  | --     | --     | --     | 
+t=8      | 32.64  | --     | --     | --     | --     | 
+t=12     | 32.91  | --     | --     | --     | --     | 
+
+Mejor combinación: p=8, t=1 → 7.59 s
+Mapa de calor y datos guardados en /home/bruno/Universidad/IIC3533/Tareas/T1/IIC3533-Tarea1-HPC/resultados/DESKTOP-LSP44BF/
+[duración: 225 s]
+
+########################################################################
+# (g)(h) Gráficos T(p), S(p), E(p) y overhead
+########################################################################
+Gráficos guardados en /home/bruno/Universidad/IIC3533/Tareas/T1/IIC3533-Tarea1-HPC/resultados/DESKTOP-LSP44BF/graficos_metricas.png
+Gráfico de overhead guardado en /home/bruno/Universidad/IIC3533/Tareas/T1/IIC3533-Tarea1-HPC/resultados/DESKTOP-LSP44BF/grafico_overhead.png
+
+p    | bs_auto    S(p) | bs_sklearn S(p) | bs_numpy   S(p)
+------------------------------------------------------------
+1    |   41.39s  1.00 |   56.79s  0.76 |   25.25s  1.40 | 
+2    |   56.70s  0.73 |   51.35s  0.84 |   15.88s  2.23 | 
+3    |   54.79s  0.76 |   43.23s  0.99 |   10.93s  3.23 | 
+4    |   40.61s  1.02 |   37.26s  1.15 |    9.39s  3.77 | 
+5    |   52.96s  0.78 |   40.04s  1.07 |    9.26s  3.82 | 
+6    |   51.66s  0.80 |   41.45s  1.04 |    8.40s  4.21 | 
+7    |   47.80s  0.87 |   43.25s  0.99 |    8.37s  4.22 | 
+8    |   41.91s  0.99 |   37.40s  1.15 |    7.19s  4.92 | 
+9    |   41.73s  0.99 |   39.98s  1.07 |    7.64s  4.63 | 
+10   |   42.58s  0.97 |   41.24s  1.04 |    7.29s  4.85 | 
+11   |   44.11s  0.94 |   44.46s  0.97 |    7.28s  4.85 | 
+12   |   42.57s  0.97 |   42.18s  1.02 |    7.19s  4.92 | 
+[duración: 2 s]
+
+########################################################################
+# LISTO. Entregar la carpeta completa: resultados/DESKTOP-LSP44BF/
+########################################################################
+total 852
+drwxr-xr-x 2 bruno bruno   4096 Sep 22 20:34 .
+drwxr-xr-x 5 bruno bruno   4096 Sep 22 20:05 ..
+-rw-r--r-- 1 bruno bruno   1177 Sep 22 20:31 benchmark_results.json
+-rw-r--r-- 1 bruno bruno    796 Sep 22 20:31 benchmark_results.npy
+-rw-r--r-- 1 bruno bruno 176945 Sep 22 20:34 grafico_overhead.png
+-rw-r--r-- 1 bruno bruno 455398 Sep 22 20:34 graficos_metricas.png
+-rw-r--r-- 1 bruno bruno 194494 Sep 22 20:34 grid_heatmap.png
+-rw-r--r-- 1 bruno bruno    691 Sep 22 20:34 grid_results.json
+-rw-r--r-- 1 bruno bruno  13822 Sep 22 20:34 terminal.txt
