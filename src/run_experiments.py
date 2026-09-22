@@ -42,6 +42,30 @@ def bootstrap_step_sklearn(X, y, semilla, t=1):
         return modelo.coef_
 
 
+def medir(descripcion, funcion):
+    """
+    Ejecuta una medición y devuelve el tiempo, o NaN si el sistema operativo mató
+    un worker por falta de memoria.
+
+    Es indispensable en máquinas con poca RAM: las versiones basadas en
+    scikit-learn usan ~1 GB por proceso (lstsq necesita espacio de trabajo para
+    la SVD además de la copia de X_b), de modo que con p alto el OOM killer las
+    termina. Sin este manejo, una tanda de horas se pierde entera al primer
+    fallo; con él, la celda queda en NaN y el resto continúa.
+    """
+    try:
+        t0 = time.time()
+        funcion()
+        return time.time() - t0
+    except Exception as e:
+        nombre = type(e).__name__
+        if "Terminated" in nombre or "Memory" in nombre or "Killed" in nombre:
+            print(f"    [{descripcion}: sin memoria suficiente, se omite]", flush=True)
+        else:
+            print(f"    [{descripcion}: falló con {nombre}]", flush=True)
+        return float("nan")
+
+
 def medir_serial(X, y, B, paso):
     """Línea base secuencial: sin joblib y con BLAS usando todos los cores."""
     t0 = time.time()
@@ -88,36 +112,37 @@ def run_benchmarks(B=48, p_max=None, t=1, saltar_sklearn=False, N=100000, k=300)
         if saltar_sklearn:
             t_auto = float("nan")
         else:
-            t0 = time.time()
-            bagging = BaggingRegressor(
-                estimator=LinearRegression(fit_intercept=False),
-                n_estimators=B, n_jobs=p, bootstrap=True, max_samples=1.0,
-                random_state=42,
-            )
-            bagging.fit(X, y)
-            t_auto = time.time() - t0
+            def _auto():
+                BaggingRegressor(
+                    estimator=LinearRegression(fit_intercept=False),
+                    n_estimators=B, n_jobs=p, bootstrap=True, max_samples=1.0,
+                    random_state=42,
+                ).fit(X, y)
+            t_auto = medir(f"bs_auto p={p}", _auto)
         resultados["auto"].append(t_auto)
 
         # 2. bs_sklearn.py
         if saltar_sklearn:
             t_sk = float("nan")
         else:
-            t0 = time.time()
-            Parallel(n_jobs=p)(
-                delayed(bootstrap_step_sklearn)(X, y, 42 + b, t) for b in range(B)
-            )
-            t_sk = time.time() - t0
+            t_sk = medir(f"bs_sklearn p={p}", lambda: Parallel(n_jobs=p)(
+                delayed(bootstrap_step_sklearn)(X, y, 42 + b, t) for b in range(B)))
         resultados["sklearn"].append(t_sk)
 
         # 3. bs_numpy.py
-        t0 = time.time()
-        Parallel(n_jobs=p)(
-            delayed(bootstrap_step_numpy)(X, y, 42 + b, t) for b in range(B)
-        )
-        t_np = time.time() - t0
+        t_np = medir(f"bs_numpy p={p}", lambda: Parallel(n_jobs=p)(
+            delayed(bootstrap_step_numpy)(X, y, 42 + b, t) for b in range(B)))
         resultados["numpy"].append(t_np)
 
         print(f"{p:<5} | {t_auto:<12.4f} | {t_sk:<14.4f} | {t_np:<12.4f}", flush=True)
+
+        # Guardado incremental tras cada p: si la tanda se interrumpe (OOM, corte
+        # de luz, Ctrl-C), no se pierde lo ya medido.
+        carpeta = carpeta_resultados(etiqueta)
+        parcial = dict(resultados, p=list(range(1, p + 1)))
+        np.save(carpeta / "benchmark_results.npy", parcial)
+        with open(carpeta / "benchmark_results.json", "w") as f:
+            json.dump(parcial, f, indent=2)
 
     carpeta = carpeta_resultados(etiqueta)
     np.save(carpeta / "benchmark_results.npy", resultados)

@@ -60,12 +60,16 @@ def run_grid(B=48, p_max=None, N=100000, k=300):
             if p * t > p_max:
                 fila += f"{'--':<7}| "   # inválida: excede los cores lógicos
                 continue
-            t0 = time.time()
-            Parallel(n_jobs=p)(
-                delayed(bootstrap_step_numpy)(X, y, 42 + b, t) for b in range(B)
-            )
-            grid_times[i, j] = time.time() - t0
-            fila += f"{grid_times[i, j]:<6.2f} | "
+            try:
+                t0 = time.time()
+                Parallel(n_jobs=p)(
+                    delayed(bootstrap_step_numpy)(X, y, 42 + b, t) for b in range(B)
+                )
+                grid_times[i, j] = time.time() - t0
+                fila += f"{grid_times[i, j]:<6.2f} | "
+            except Exception as e:
+                print(f"\n    [p={p}, t={t}: falló ({type(e).__name__}), se omite]")
+                fila += f"{'OOM':<7}| "
         print(fila, flush=True)
 
     carpeta = carpeta_resultados(etiqueta)

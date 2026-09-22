@@ -3,7 +3,7 @@
 ## Qué es esto
 
 Tarea 1 de **IIC3533 · Computación de Alto Rendimiento · 2026-2** (PUC).
-Enunciado: [tarea01.pdf](enunciado/tarea01.pdf). Entrega: **viernes 25 de septiembre de 2026, 23:59**, vía Canvas, en **formato PDF**.
+Enunciado: [tarea01.pdf](tarea01.pdf). Entrega: **viernes 25 de septiembre de 2026, 23:59**, vía Canvas, en **formato PDF**.
 
 Tema: **bootstrapping paralelo para regresión lineal OLS** usando `joblib` (paralelismo de tareas).
 Trabajo en grupo de tres personas. **Los experimentos deben correrse en al menos dos computadores distintos.**
@@ -43,25 +43,47 @@ No hay tests, ni linter, ni CI. Es un repo de scripts académicos: se ejecutan a
 
 ## Las dos máquinas
 
-**Máquina 1 — "bruno" (ya ejecutada).** Todos los resultados versionados provienen de aquí.
-- WSL2, usuario `bruno`, host `DESKTOP-52S4V2O`, ruta `~/universidad/IIC3533/Tareas/T1`
-- **8 cores lógicos** → p_máx = 8
-- Entorno conda `tareal-hpc`; BLAS = **MKL** (`libmkl_rt.so.2`), **4 threads por defecto**
+**Máquina 1 — `DESKTOP-52S4V2O` (✅ EJECUTADA con el código corregido).**
+Resultados completos en `resultados/DESKTOP-52S4V2O/`.
+- WSL2, **Intel Core i5-1135G7 @ 2.40 GHz**, 4 cores físicos / **8 lógicos** → p_máx = 8
+- 7.6 GiB de RAM
+- conda, Python 3.13.15, NumPy 2.5.2, joblib 1.5.3, threadpoolctl 3.5.0
+- BLAS = **MKL 2025.0**, 4 threads por defecto en el padre (1 dentro de cada worker con p=8)
 
-**Máquina 2 — "benja" (PENDIENTE).** Esta máquina, donde corre esta sesión.
-- WSL2 (`6.18.33.2-microsoft-standard-WSL2`), ruta `/home/benjasaldias/Semestres/2026-2/HPC/T1`
-- CPU **Intel Core i7-14650HX**, **24 cores lógicos** (12 físicos × 2 hilos) → p_máx = 24
-- Python **3.10.12 del sistema** (no conda), numpy 2.0.2, joblib 1.4.2, scikit-learn 1.5.2, threadpoolctl 3.5.0, matplotlib 3.9.2
-- BLAS = **OpenBLAS 0.3.27** (`libscipy_openblas64`), **24 threads por defecto**
-- ⚠️ **`/mnt/c/Users/benja/.wslconfig` limita WSL a `memory=6GB` y `swap=2GB`.** `/dev/shm` = 2.9 GB.
+**Máquina 2 — PENDIENTE, a cargo de un tercer integrante.**
+La máquina de benja (`ALLUKA`, 24 cores) **quedó descartada por RAM**: el host tiene 16 GB
+y `bs_sklearn` necesita ~1 GB por proceso, así que p alto no cabe. El entorno conda
+`tarea1-hpc` quedó instalado por si se retoma.
 
-El contraste MKL/8 cores vs OpenBLAS/24 cores es exactamente el material del ítem (j). Vale la pena conservarlo en vez de homogeneizar los entornos.
+### Resultados clave de la máquina 1
 
-### Bloqueador de memoria en la máquina 2
+| Métrica | Valor |
+|---|---|
+| Mejor tiempo `bs_numpy` | 9.88 s (p=3) |
+| Línea base secuencial `bs_numpy` | 11.34 s |
+| **Speedup máximo** | **1.22** (`bs_sklearn`, p=3) — el problema no escala |
+| Eficiencia en p=8 | 0.08–0.12 |
+| Mejor (p, t) | **(4, 1)** → 11.10 s |
+| Oversubscription con t=4 | **+44.6 %** de tiempo |
+| Variante `--pesos` | **más lenta** (13.57 s vs 10.98 s) |
 
-Con 6 GB, correr `p` procesos donde cada worker materializa `X_b` (240 MB) + `y_b` + el producto intermedio es inviable para `p` alto: alrededor de p ≥ 12–16 se llega a swap u OOM. Antes de ejecutar acá hay que **subir `memory` en `.wslconfig` a 12 GB y reiniciar WSL** (`wsl --shutdown` desde PowerShell), o el benchmark de p = 1..24 no termina.
+Interpretación: el problema está **limitado por ancho de banda de memoria**, no por
+cómputo. Tres evidencias convergen: speedup saturado en 1.22, overhead superlineal, y
+superficie T(p,t) plana (6 % de rango) entre todas las configuraciones que ocupan los 8
+cores.
 
-`joblib` con el backend loky hace *memmap* automático de arreglos > 1 MB en `/dev/shm`, así que `X` se comparte sin replicarse; lo que no se comparte es la copia por resample.
+### Huella de memoria (medida)
+
+| Versión | Por worker | Pico en p=24 |
+|---|---|---|
+| `bs_numpy` | ~360 MB | ~9.4 GB |
+| `bs_sklearn` / `bs_auto` | ~1 GB | ~24 GB |
+
+`lstsq` necesita espacio de trabajo para la SVD además de la copia de `X_b`. Por eso la
+segunda máquina necesita RAM holgada, o `bs_sklearn` muere por OOM con p alto.
+
+`joblib` con loky hace *memmap* de arreglos > 1 MB en `/dev/shm`, así que `X` se comparte
+sin replicarse; lo que no se comparte es la copia por resample.
 
 ## Cómo ejecutar
 
@@ -119,10 +141,19 @@ Todos los bugs detectados en la revisión ya están arreglados. El diagnóstico 
 
 joblib/loky **ya mitiga parcialmente el oversubscription** por su cuenta: fija `inner_max_num_threads = cpu_count // n_jobs` en cada worker. Medido en la máquina 2 (24 cores): con `p=4` los workers arrancan con 6 threads BLAS, con `p=8` arrancan con 3. En ambos casos `p × threads = 24`, justo el número de cores. El oversubscription aparece cuando uno **sube** `t` por encima de ese default: con `p=8, t=4` son 32 threads sobre 24 cores.
 
+## Informe
+
+`informe/informe.tex` — 19 páginas, compila sin errores. **Los ítems (a) a (i) están
+contestados** con los datos de la máquina 1. Falta solo el ítem (j) y las columnas/figuras
+de la máquina 2.
+
+Lo pendiente está marcado con cajas rojas: `grep -n "pendiente{" informe/informe.tex`.
+Ver [informe/README.md](informe/README.md) para compilar.
+
 ## Qué falta
 
-Estado detallado en [resumen.md](resumen.md). En una línea: **el código ya está corregido; falta subir la memoria de WSL, correr todo en la máquina 2 y escribir el informe PDF.**
-
-⚠️ Antes de ejecutar acá: subir `memory` en `.wslconfig` a 12 GB y hacer `wsl --shutdown`. El pico medido para `p = 24` es ~9.4 GB; con los 6 GB actuales no cabe, con 12 GB sí. El host tiene 16 GB.
-
-El enunciado permite el uso de IA **siempre que se declare en el informe**. Hay que incluir esa declaración.
+1. Ejecutar `bash correr_todo.sh` en una segunda máquina con RAM suficiente.
+2. Completar en el `.tex`: columna de la máquina 2 en la tabla de entorno, tablas de (f) y
+   (g), figuras (reemplazar `MAQUINA2` por la etiqueta real), y redactar el ítem (j).
+3. Capturas del monitor del sistema para el ítem (e).
+4. Revisar la declaración de uso de IA.

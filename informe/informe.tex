@@ -1,0 +1,1142 @@
+% =====================================================================
+%  Tarea 1 — IIC3533 Computación de Alto Rendimiento — 2026-2
+%  Compilar con: pdflatex informe.tex  (dos veces, por las referencias)
+%  Las figuras se leen desde ../resultados/<maquina>/
+% =====================================================================
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% Español si está disponible (Overleaf lo trae; en Debian/Ubuntu es el paquete
+% texlive-lang-spanish). Si falta, el documento igual compila, solo que los
+% títulos automáticos ("Índice", "Cuadro") quedan en inglés.
+\IfFileExists{spanish.ldf}{\usepackage[spanish,es-tabla]{babel}}{%
+  \usepackage[english]{babel}%
+  \PackageWarningNoLine{informe}{babel-spanish no disponible: instalar
+    texlive-lang-spanish para los titulos en espanol}}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{float}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[hidelinks]{hyperref}
+
+% ---------------------------------------------------------------
+% Marcador de secciones pendientes. BORRAR TODOS ANTES DE ENTREGAR.
+% ---------------------------------------------------------------
+\newcommand{\pendiente}[1]{%
+  \par\medskip\noindent
+  \fcolorbox{red!60!black}{red!5}{%
+    \begin{minipage}{0.96\linewidth}
+      \small\textbf{\textcolor{red!60!black}{PENDIENTE}}\par\vspace{2pt}#1
+    \end{minipage}}%
+  \par\medskip}
+
+% Figura que no falla si el archivo todavía no existe
+% \detokenize evita que los guiones bajos de las rutas se interpreten como
+% subíndices matemáticos cuando la figura todavía no existe.
+\newcommand{\figurasiexiste}[3]{%
+  \IfFileExists{#1}{\includegraphics[width=#2]{#1}}{%
+    \fcolorbox{red!60!black}{red!5}{\begin{minipage}{0.9\linewidth}
+      \centering\small\vspace{1cm}
+      \textcolor{red!60!black}{\textbf{Figura pendiente:} \texttt{\detokenize{#1}}}\par
+      \vspace{2pt}#3\vspace{1cm}
+    \end{minipage}}}}
+
+% ---------------------------------------------------------------
+% Estilo para el código Python
+% ---------------------------------------------------------------
+\definecolor{codegris}{rgb}{0.95,0.95,0.95}
+\definecolor{codeverde}{rgb}{0,0.5,0}
+\definecolor{codemorado}{rgb}{0.5,0,0.5}
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{codeverde},
+  stringstyle=\color{codemorado},
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=6pt,
+  backgroundcolor=\color{codegris},
+  frame=single, rulecolor=\color{gray!50},
+  breaklines=true, breakatwhitespace=true,
+  showstringspaces=false, tabsize=4,
+  captionpos=b, xleftmargin=12pt,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+           {ñ}{{\~n}}1 {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1
+           {Ú}{{\'U}}1 {Ñ}{{\~N}}1 {¿}{{?`}}1 {¡}{{!`}}1
+}
+
+% ---------------------------------------------------------------
+\title{\vspace{-1cm}\textbf{Tarea 1: Bootstrapping paralelo para regresión lineal}\\
+       \large IIC3533 --- Computación de Alto Rendimiento --- 2026-2}
+\author{Benjamín Saldías \and Bruno \textit{[apellido]} \and \textit{[tercer integrante]}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% =====================================================================
+\pendiente{\textbf{Estado del documento (borrar esta caja antes de entregar).}
+Los ítems (a) a (i) están contestados con los resultados de la \textbf{máquina 1}.
+Falta únicamente la tanda de la \textbf{máquina 2}, que completa las tablas y figuras
+marcadas y habilita el ítem (j). Para generarla: \texttt{bash correr\_todo.sh} en el
+segundo computador, y luego reemplazar \texttt{MAQUINA2} por su etiqueta en las rutas
+de las figuras.}
+
+\section*{Resumen}
+
+Se implementaron y compararon tres versiones del algoritmo de \textit{bootstrapping}
+para estimar intervalos de confianza de los coeficientes de una regresión lineal por
+mínimos cuadrados, con $N = 100\,000$ observaciones, $k = 300$ variables y $B = 48$
+resamples. Las tres versiones producen intervalos estadísticamente equivalentes y
+consistentes con los coeficientes verdaderos $\boldsymbol{\beta}^*$, pero difieren en
+un factor cercano a $6\times$ en tiempo de ejecución: la versión que resuelve la
+ecuación normal directamente con NumPy resulta claramente la más eficiente frente a
+las que usan \texttt{LinearRegression} de \texttt{scikit-learn}. El análisis de
+escalamiento muestra que el problema está limitado por ancho de banda de memoria y no
+por cómputo, lo que explica que el \textit{speedup} se sature muy por debajo del ideal.
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Entorno experimental}
+\label{sec:entorno}
+
+Los experimentos se realizaron en dos computadores distintos, cuyas características se
+resumen en la Tabla~\ref{tab:maquinas}. Se mantuvieron deliberadamente las diferencias
+de entorno (biblioteca BLAS y versión de Python), ya que son parte del objeto de
+comparación del ítem (j).
+
+\begin{table}[H]
+\centering
+\caption{Características de los dos computadores utilizados.}
+\label{tab:maquinas}
+\small
+\begin{tabular}{lll}
+\toprule
+ & \textbf{Máquina 1} & \textbf{Máquina 2} \\
+\midrule
+Identificador      & \texttt{DESKTOP-52S4V2O} & \textit{[completar]} \\
+CPU                & Intel Core i5-1135G7 @ 2.40\,GHz & \textit{[completar]} \\
+Cores físicos      & 4 & \textit{[completar]} \\
+\textbf{Cores lógicos ($p_{\max}$)} & \textbf{8} & \textit{[completar]} \\
+Memoria RAM        & 7{,}6 GiB & \textit{[completar]} \\
+Sistema operativo  & WSL2 sobre Windows & \textit{[completar]} \\
+Python             & 3.13.15 (conda) & \textit{[completar]} \\
+NumPy              & 2.5.2 & \textit{[completar]} \\
+joblib             & 1.5.3 & \textit{[completar]} \\
+threadpoolctl      & 3.5.0 & \textit{[completar]} \\
+\textbf{BLAS}      & \textbf{MKL} 2025.0 & \textit{[completar]} \\
+Threads BLAS por defecto & 4 & \textit{[completar]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\pendiente{Completar la columna de la máquina 2 con la salida de
+\texttt{python src/config.py} y \texttt{lscpu}, que queda registrada automáticamente al
+comienzo de \texttt{resultados/<máquina>/terminal.txt}.}
+
+\paragraph{Estructura del código.} Cada versión del algoritmo vive en su propio archivo
+(\texttt{bs\_auto.py}, \texttt{bs\_sklearn.py}, \texttt{bs\_numpy.py}) y comparte la
+generación de datos (\texttt{data\_utils.py}). Los experimentos se lanzan con
+\texttt{correr\_todo.sh}, que ejecuta la tanda completa y deja el registro en
+\texttt{resultados/<máquina>/}, de modo que los resultados de un computador no
+sobrescriben los del otro.
+
+% =====================================================================
+\section{(a) Generación de los datos sintéticos}
+\label{sec:a}
+
+Los datos se generan con una semilla fija (\texttt{seed = 42}), siguiendo exactamente
+los tres pasos del enunciado: se muestrean los $k+1$ coeficientes verdaderos
+$\boldsymbol{\beta}^*$ desde $\mathcal{N}(0,1)$, se construye la matriz de datos de
+$N \times k$ con entradas i.i.d.\ $\mathcal{N}(0,1)$, se le antepone una columna de
+unos para formar $X \in \mathbb{R}^{N \times (k+1)}$, y finalmente
+$\mathbf{y} = X\boldsymbol{\beta}^* + \boldsymbol{\varepsilon}$ con
+$\boldsymbol{\varepsilon}$ de $N$ valores i.i.d.\ $\mathcal{N}(0,1)$.
+
+\begin{lstlisting}[caption={Generación de los datos sintéticos (\texttt{data\_utils.py}).}]
+def generate_synthetic_data(N=100000, k=300, seed=42):
+    np.random.seed(seed)                          # reproducibilidad
+
+    beta_star = np.random.normal(0, 1, k + 1)     # (I)  coeficientes verdaderos
+    X_features = np.random.normal(0, 1, (N, k))   # (II) matriz de datos
+
+    unos = np.ones((N, 1))
+    X = np.hstack((unos, X_features))             # columna de unos al inicio
+
+    ruido = np.random.normal(0, 1, N)             # (III)
+    y = X.dot(beta_star) + ruido
+
+    return X, y, beta_star
+\end{lstlisting}
+
+\paragraph{Verificación.} Las dimensiones resultantes son
+$X \in \mathbb{R}^{100000 \times 301}$, $\mathbf{y} \in \mathbb{R}^{100000}$ y
+$\boldsymbol{\beta}^* \in \mathbb{R}^{301}$, como exige el enunciado.
+
+\paragraph{Consideración de memoria.} La matriz $X$ ocupa
+$100\,000 \times 301 \times 8~\text{bytes} \approx 241$~MB en doble precisión. Este
+número resulta central para todo el análisis posterior: es el volumen de datos que hay
+que hacer llegar a cada proceso, y cada resample crea una copia de ese mismo tamaño.
+Generar los datos toma apenas $0{,}55$~s, de modo que su costo es despreciable frente
+al de los ajustes.
+
+% =====================================================================
+\section{(b) Las tres implementaciones}
+\label{sec:b}
+
+\subsection{Versión 1: \texttt{bs\_auto.py} --- \texttt{BaggingRegressor}}
+
+El bootstrapping y el paralelismo quedan enteramente delegados a
+\texttt{scikit-learn}. Se usa \texttt{fit\_intercept=False} porque $X$ ya incluye la
+columna de unos, y \texttt{max\_samples=1.0} con \texttt{bootstrap=True} para que cada
+estimador muestree $N$ filas con reemplazo.
+
+\begin{lstlisting}[caption={Núcleo de \texttt{bs\_auto.py}.}]
+modelo_bagging = BaggingRegressor(
+    estimator=LinearRegression(fit_intercept=False),
+    n_estimators=B,      # B = 48 resamples
+    n_jobs=p,            # p procesos
+    bootstrap=True,
+    max_samples=1.0,     # muestrea N elementos con reemplazo
+    random_state=42,     # imprescindible para reproducibilidad (ver seccion 4)
+)
+modelo_bagging.fit(X, y)
+beta_hats = np.array([est.coef_ for est in modelo_bagging.estimators_])
+\end{lstlisting}
+
+\subsection{Versión 2: \texttt{bs\_sklearn.py} --- \texttt{joblib} + \texttt{LinearRegression}}
+
+Aquí el paralelismo es explícito. Cada tarea sortea sus propios índices y ajusta un
+\texttt{LinearRegression}. La semilla $42+b$ hace que cada resample sea distinto pero
+reproducible.
+
+\begin{lstlisting}[caption={Núcleo de \texttt{bs\_sklearn.py}.}]
+def ajustar_bootstrap(X, y, semilla, t=1):
+    with threadpool_limits(limits=t, user_api="blas"):
+        np.random.seed(semilla)
+        N = X.shape[0]
+        indices = np.random.choice(N, size=N, replace=True)  # (I)
+        X_b, y_b = X[indices], y[indices]                    # (II)
+        modelo = LinearRegression(fit_intercept=False)       # (III)
+        modelo.fit(X_b, y_b)
+        return modelo.coef_
+
+beta_hats = Parallel(n_jobs=p)(
+    delayed(ajustar_bootstrap)(X, y, 42 + b, t) for b in range(B))
+\end{lstlisting}
+
+\subsection{Versión 3: \texttt{bs\_numpy.py} --- \texttt{joblib} + ecuación normal}
+
+La única diferencia con la anterior es el ajuste: en lugar de delegar en
+\texttt{scikit-learn}, se resuelve directamente el sistema
+$(X^\top X)\hat{\boldsymbol{\beta}} = X^\top \mathbf{y}$.
+
+\begin{lstlisting}[caption={Núcleo de \texttt{bs\_numpy.py}.}]
+def ajustar_bootstrap_numpy(X, y, semilla, t=1):
+    with threadpool_limits(limits=t, user_api="blas"):
+        np.random.seed(semilla)
+        N = X.shape[0]
+        indices = np.random.choice(N, size=N, replace=True)
+        X_b, y_b = X[indices], y[indices]
+        X_T = X_b.T
+        return np.linalg.solve(X_T.dot(X_b), X_T.dot(y_b))
+\end{lstlisting}
+
+\subsection{Iteraciones de optimización}
+\label{sec:b-iteraciones}
+
+\paragraph{Iteración 1: de \texttt{lstsq} a la ecuación normal.}
+La primera implementación usaba \texttt{LinearRegression}, que internamente llama a
+\texttt{scipy.linalg.lstsq} y resuelve el problema mediante una descomposición SVD de
+la matriz completa $X^{(b)} \in \mathbb{R}^{100000 \times 301}$. Ese método es
+numéricamente más estable ante matrices mal condicionadas, pero mucho más caro:
+descompone una matriz de $100\,000$ filas.
+
+Resolver la ecuación normal, en cambio, primero \emph{reduce} el problema: el producto
+$X^\top X$ cuesta $O(Nk^2)$ pero produce una matriz de apenas $301 \times 301$, y
+factorizarla es entonces trivial ($O(k^3)$ con $k=301$). Como los datos del problema
+son i.i.d.\ $\mathcal{N}(0,1)$, la matriz está muy bien condicionada y no hay razón
+para pagar el costo de la SVD.
+
+El efecto medido en la máquina 1 fue de aproximadamente $6\times$:
+
+\begin{table}[H]
+\centering
+\caption{Efecto de la iteración 1, medido en la máquina 1 con $p = 2$.}
+\label{tab:iteracion1}
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Versión} & \textbf{Método de ajuste} & \textbf{Tiempo (s)} \\
+\midrule
+\texttt{bs\_auto}    & \texttt{lstsq} (SVD), vía \texttt{BaggingRegressor} & 96{,}40 \\
+\texttt{bs\_sklearn} & \texttt{lstsq} (SVD), vía \texttt{LinearRegression} & 86{,}83 \\
+\texttt{bs\_numpy}   & ecuación normal (\texttt{np.linalg.solve})          & \textbf{10{,}88} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Iteración 2: evitar materializar $X^{(b)}$.}
+Una vez eliminado el costo de la SVD, el cuello de botella deja de ser aritmético. La
+línea \texttt{X\_b = X[indices]} copia 241~MB en cada resample con un patrón de
+\emph{acceso aleatorio} a memoria, que es el caso más desfavorable para la jerarquía de
+caché.
+
+Ese paso se puede evitar por completo. Un resample bootstrap no es más que asignar a
+cada fila un peso entero $w_i$ igual al número de veces que fue sorteada, de modo que
+
+\begin{equation}
+X^{(b)\top} X^{(b)} \;=\; X^\top \operatorname{diag}(\mathbf{w})\, X,
+\qquad
+X^{(b)\top} \mathbf{y}^{(b)} \;=\; X^\top (\mathbf{w} \odot \mathbf{y}).
+\label{eq:pesos}
+\end{equation}
+
+\begin{lstlisting}[caption={Variante con pesos multinomiales (\texttt{bs\_numpy.py --pesos}).}]
+def ajustar_bootstrap_numpy_pesos(X, y, semilla, t=1):
+    with threadpool_limits(limits=t, user_api="blas"):
+        np.random.seed(semilla)
+        N = X.shape[0]
+        indices = np.random.choice(N, size=N, replace=True)
+        w = np.bincount(indices, minlength=N).astype(X.dtype)  # conteos por fila
+        Xw = X * w[:, None]          # acceso secuencial, no aleatorio
+        return np.linalg.solve(X.T.dot(Xw), X.T.dot(y * w))
+\end{lstlisting}
+
+Como se usan \emph{los mismos índices} que en la versión anterior, ambas calculan el
+mismo estimador: la diferencia numérica medida es de $6{,}2 \times 10^{-15}$, atribuible
+únicamente al orden de acumulación en punto flotante. Sigue existiendo un arreglo
+temporal del tamaño de $X$, pero se recorre de forma secuencial.
+
+Medida a escala completa en la máquina 1 con $p = 8$, la variante con pesos resultó
+\textbf{más lenta}, no más rápida:
+
+\begin{table}[H]
+\centering
+\caption{Efecto de la iteración 2, medido en la máquina 1 con $p = 8$, $t = 1$.}
+\label{tab:iteracion2}
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Variante de \texttt{bs\_numpy}} & \textbf{Tiempo (s)} \\
+\midrule
+Índices: \texttt{X\_b = X[indices]}                     & \textbf{10{,}98} \\
+Pesos: \texttt{Xw = X * w[:, None]} (ecuación~\ref{eq:pesos}) & 13{,}57 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El resultado es negativo pero informativo, y refuerza la interpretación que se desarrolla
+en la Sección~\ref{sec:h}. Si el cuello de botella fuera el \emph{patrón} de acceso a
+memoria, convertir el acceso aleatorio en secuencial debería haber ayudado. Que no lo
+haga indica que lo que domina es el \emph{volumen} de datos movido: ambas variantes
+asignan y recorren un arreglo temporal de 241~MB por resample, y la versión con pesos
+agrega además el cálculo de \texttt{np.bincount} y una multiplicación elemento a elemento
+sobre los $100\,000 \times 301$ valores. El acceso aleatorio de \texttt{X[indices]} no era
+tan costoso como esperábamos, probablemente porque el \textit{prefetcher} del procesador
+tolera bien un patrón que, aunque desordenado, recorre filas completas y contiguas de
+2408 bytes cada una.
+
+Conclusión de las dos iteraciones: la mejora relevante fue algorítmica (cambiar SVD por
+ecuación normal, $6\times$), mientras que la micro-optimización del patrón de acceso no
+aportó. Conservamos ambas variantes en el código porque la comparación es parte del
+resultado.
+
+\paragraph{Observación adicional: consumo de memoria.}
+Al ejecutar en la máquina 2 (limitada a 6~GB), \texttt{bs\_sklearn} fue terminada por
+el sistema operativo (\texttt{SIGKILL}) con $p = 6$, mientras que \texttt{bs\_numpy}
+completó sin problemas con el mismo $p$. La razón es que \texttt{lstsq} requiere, además
+de la copia de $X^{(b)}$, espacio de trabajo interno para la descomposición SVD, de
+varias veces el tamaño de la matriz. La ventaja de la ecuación normal, por lo tanto, no
+es solo de tiempo sino también de huella de memoria.
+
+% =====================================================================
+\section{(c) Correctitud y reproducibilidad}
+\label{sec:c}
+
+Para responder este ítem se implementó el script \texttt{src/verificar\_correctitud.py},
+que ejecuta las versiones sobre los mismos datos y compara sus salidas.
+
+\subsection{Consistencia con los coeficientes verdaderos}
+
+Los intervalos de confianza se construyen según el Paso 3 del enunciado: para cada
+coeficiente $j$ se ordenan los $B$ valores $\hat{\beta}^{(1)}_j, \dots, \hat{\beta}^{(B)}_j$
+y se descarta el $2{,}5\%$ inferior y superior.
+
+\begin{lstlisting}[caption={Construcción del intervalo de confianza al 95\%.}]
+limite_inferior = np.percentile(beta_hats, 2.5, axis=0)
+limite_superior = np.percentile(beta_hats, 97.5, axis=0)
+\end{lstlisting}
+
+Los resultados a escala completa ($N = 100\,000$, $k = 300$, $B = 48$, con $p = 8$) se
+presentan en la Tabla~\ref{tab:cobertura}.
+
+\begin{table}[H]
+\centering
+\caption{Intervalos de confianza al 95\,\% y cobertura de $\boldsymbol{\beta}^*$.}
+\label{tab:cobertura}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Versión} & \textbf{IC 95\,\% de $\beta_0$} & \textbf{Ancho medio} & \textbf{Cobertura de $\boldsymbol{\beta}^*$} \\
+\midrule
+\texttt{bs\_numpy}          & $[0{,}4925,\ 0{,}5043]$ & $0{,}01142$ & $91{,}4\%$ \\
+\texttt{bs\_sklearn}        & $[0{,}4925,\ 0{,}5043]$ & $0{,}01142$ & $91{,}4\%$ \\
+\texttt{bs\_numpy (pesos)}  & $[0{,}4925,\ 0{,}5043]$ & $0{,}01142$ & $91{,}4\%$ \\
+\texttt{bs\_auto}           & $[0{,}4902,\ 0{,}5018]$ & $0{,}01141$ & $91{,}7\%$ \\
+\bottomrule
+\end{tabular}
+\par\vspace{2pt}
+\footnotesize Valor verdadero: $\beta_0^* = 0{,}4967$. Los cuatro intervalos lo contienen.
+\end{table}
+
+Los cuatro intervalos contienen el valor verdadero $\beta_0^* = 0{,}4967$, y los anchos
+medios coinciden hasta la quinta cifra decimal, lo que confirma que las cuatro
+implementaciones estiman la misma distribución muestral. A modo de ilustración, la
+Tabla~\ref{tab:primeros} muestra los primeros cinco coeficientes.
+
+\begin{table}[H]
+\centering
+\caption{Intervalos de \texttt{bs\_numpy} para los primeros cinco coeficientes.}
+\label{tab:primeros}
+\small
+\begin{tabular}{crrrc}
+\toprule
+$j$ & $\beta^*_j$ & \textbf{Límite inferior} & \textbf{Límite superior} & \textbf{¿Cubre?} \\
+\midrule
+0 & $ 0{,}4967$ & $ 0{,}4925$ & $ 0{,}5043$ & sí \\
+1 & $-0{,}1383$ & $-0{,}1400$ & $-0{,}1286$ & sí \\
+2 & $ 0{,}6477$ & $ 0{,}6398$ & $ 0{,}6524$ & sí \\
+3 & $ 1{,}5230$ & $ 1{,}5206$ & $ 1{,}5305$ & sí \\
+4 & $-0{,}2342$ & $-0{,}2393$ & $-0{,}2290$ & sí \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Con $B = 48$ resamples, los percentiles $2{,}5$ y $97{,}5$ se estiman a partir de muy
+pocas observaciones en cada cola, por lo que la cobertura empírica fluctúa en torno al
+95\,\% nominal y no debe esperarse que coincida exactamente. Aumentar $B$ estrecharía
+esa fluctuación, a costa de más cómputo.
+
+\subsection{¿En qué medida son equivalentes las distintas versiones?}
+\label{sec:c-equivalencia}
+
+Conviene distinguir dos niveles de equivalencia, porque las versiones no se comportan
+igual:
+
+\begin{description}
+\item[Equivalencia numérica.] \texttt{bs\_sklearn} y \texttt{bs\_numpy} comparten la
+  semilla $42+b$ en cada tarea, de modo que remuestrean \emph{exactamente las mismas
+  filas}. Sus estimadores deben coincidir hasta el error de redondeo, y eso es lo que
+  se observa. Lo mismo vale para la variante con pesos, que reutiliza los mismos
+  índices.
+\item[Equivalencia estadística.] \texttt{bs\_auto} no puede coincidir numéricamente:
+  \texttt{BaggingRegressor} sortea sus resamples con su propio generador interno,
+  controlado por \texttt{random\_state}, que es independiente del que usan las otras
+  dos versiones. Sus resamples son \emph{otras} muestras del mismo procedimiento. Por
+  lo tanto la comparación correcta es entre distribuciones: los intervalos deben
+  solaparse y cubrir $\boldsymbol{\beta}^*$ en proporción similar, pero sus extremos
+  difieren en el orden de magnitud de la propia variabilidad Monte Carlo.
+\end{description}
+
+\begin{table}[H]
+\centering
+\caption{Diferencias máximas entre las estimaciones de las distintas versiones.}
+\label{tab:equivalencia}
+\small
+\begin{tabular}{lcl}
+\toprule
+\textbf{Comparación} & \textbf{Diferencia máxima} & \textbf{Interpretación} \\
+\midrule
+\texttt{bs\_numpy} vs \texttt{bs\_sklearn}       & $8{,}3 \times 10^{-14}$ & mismas filas $\Rightarrow$ equivalencia numérica \\
+\texttt{bs\_numpy} vs \texttt{bs\_numpy (pesos)} & $8{,}5 \times 10^{-14}$ & mismo resample, distinto orden de suma \\
+\texttt{bs\_numpy} vs \texttt{bs\_auto}          & $4{,}6 \times 10^{-3}$  & RNG distinto $\Rightarrow$ equivalencia estadística \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La separación es de once órdenes de magnitud, y confirma nítidamente la distinción
+anterior. Las diferencias de $\sim 10^{-14}$ corresponden al error de redondeo de la
+aritmética de doble precisión sobre sumas de $100\,000$ términos: son ruido numérico,
+no discrepancias algorítmicas. La diferencia de $\sim 10^{-3}$ frente a
+\texttt{bs\_auto}, en cambio, es del orden del ancho de los propios intervalos
+($\approx 0{,}011$), es decir, exactamente la variabilidad Monte Carlo que cabe esperar
+entre dos conjuntos distintos de 48 resamples.
+
+\subsection{Condiciones para que los resultados sean reproducibles}
+
+Para que dos ejecuciones entreguen resultados idénticos deben cumplirse:
+
+\begin{enumerate}
+\item \textbf{Semilla fija en la generación de datos.} \texttt{np.random.seed(42)} antes
+  de generar $\boldsymbol{\beta}^*$, $X$ y el ruido. Además el \emph{orden} de las
+  llamadas al generador debe mantenerse, ya que comparten el mismo estado.
+
+\item \textbf{Semilla fija y determinista en cada tarea.} Cada resample se siembra con
+  $42+b$, donde $b$ es el índice del resample, no el del worker. Esta distinción es
+  esencial: significa que el resultado \textbf{no depende de $p$}, ni del orden en que
+  el planificador asigne las tareas, ni de cuántas le toquen a cada proceso. Si en
+  cambio cada worker sembrara desde su propio estado, el resultado cambiaría al variar
+  $p$.
+
+\item \textbf{\texttt{random\_state} explícito en \texttt{BaggingRegressor}.} Es el
+  único punto donde el sorteo no está bajo nuestro control directo. Sin ese argumento,
+  \texttt{scikit-learn} usa el estado global de NumPy en el momento del ajuste y los
+  resamples cambian en cada corrida. Esta fue, de hecho, una omisión en nuestra primera
+  implementación.
+
+\item \textbf{Mismo orden de reducción en punto flotante.} La suma flotante no es
+  asociativa, de modo que $X^\top X$ puede diferir en los últimos bits según cómo BLAS
+  particione el trabajo entre threads. Diferencias del orden de $10^{-15}$ son entonces
+  esperables entre ejecuciones con distinto número de threads, o entre MKL y OpenBLAS.
+  Esto afecta a la reproducibilidad \emph{bit a bit}, no a la validez estadística.
+\end{enumerate}
+
+Verificamos empíricamente los puntos 1--3 repitiendo cada versión dos veces dentro de
+la misma corrida, a escala completa: tanto \texttt{bs\_numpy} como \texttt{bs\_auto}
+arrojaron una diferencia máxima de exactamente $0{,}000 \times 10^{0}$, es decir,
+resultados idénticos bit a bit.
+
+% =====================================================================
+\section{(d) Creación de procesos por el backend multiprocessing}
+\label{sec:d}
+
+\subsection{Qué backend se usa realmente}
+
+\texttt{joblib.Parallel} utiliza por defecto el backend \texttt{loky}, una variante
+robustecida de \texttt{multiprocessing} que mantiene un \emph{pool} de procesos
+reutilizable entre llamadas sucesivas. A diferencia de \texttt{multiprocessing.Pool},
+\texttt{loky} arranca sus workers mediante un mecanismo equivalente a \texttt{spawn}:
+lanza un intérprete de Python nuevo que vuelve a importar los módulos necesarios, en
+lugar de clonar el proceso padre. Esto lo hace más predecible (evita los problemas
+clásicos de \texttt{fork} con threads y con bibliotecas nativas que mantienen estado
+interno) a cambio de un costo de arranque mayor.
+
+\subsection{¿Cómo se asigna memoria al crear un proceso?}
+
+Conviene contrastar los dos mecanismos que ofrece Linux, porque el comportamiento de
+memoria es muy distinto:
+
+\paragraph{Con \texttt{fork}.} El núcleo no copia la memoria del proceso padre. Duplica
+únicamente la tabla de páginas y marca todas las páginas de ambos procesos como
+\emph{solo lectura}, compartiendo las páginas físicas. Esto es \textbf{copy-on-write}:
+mientras nadie escriba, ambos procesos leen exactamente las mismas páginas físicas y el
+costo en memoria es cercano a cero. Cuando alguno intenta escribir, se produce un fallo
+de página, el núcleo copia \emph{esa página} (típicamente 4~KiB) y recién ahí se
+consume memoria adicional.
+
+Hay una sutileza importante en Python: el intérprete usa conteo de referencias, y el
+contador vive en la cabecera de cada objeto. Con solo \emph{leer} un objeto Python se
+escribe en su cabecera, lo que dispara la copia de la página que lo contiene. Por eso
+el copy-on-write rinde mucho menos de lo esperable para estructuras de datos Python.
+Con arreglos NumPy la situación es más favorable: el conteo de referencias toca el
+objeto \texttt{ndarray} (unos cientos de bytes), pero \emph{no} el búfer de datos
+contiguo, que puede permanecer compartido indefinidamente.
+
+\paragraph{Con \texttt{spawn}/\texttt{loky}.} No hay herencia de memoria en absoluto.
+Cada worker es un proceso completamente nuevo, con su propio intérprete, que reimporta
+los módulos y recibe los argumentos de la tarea serializados. Todo lo que el worker
+necesite debe viajar explícitamente hacia él. El costo de arranque es del orden de
+decenas a cientos de milisegundos por proceso, y se paga una sola vez porque
+\texttt{loky} reutiliza el pool.
+
+\subsection{¿Qué ocurre con los arreglos \texttt{X} e \texttt{y} al lanzar $p$ procesos?}
+
+Serializar $X$ (241~MB) y enviarlo por un \textit{pipe} a cada uno de los $p$ workers
+sería catastrófico: implicaría $p \times 241$~MB de tráfico y de memoria duplicada.
+\texttt{joblib} evita esto con un mecanismo específico. Todo arreglo NumPy cuyo tamaño
+supere \texttt{max\_nbytes} (por defecto 1~MB) no se serializa: se vuelca una sola vez a
+un archivo temporal y se entrega a los workers como un \texttt{numpy.memmap} en modo
+solo lectura. Cada worker lo mapea en su espacio de direcciones y el núcleo mantiene una
+única copia de las páginas en la caché de páginas, compartida por todos.
+
+En Linux ese archivo se crea en \texttt{/dev/shm} cuando está disponible, es decir, en
+un sistema de archivos residente en RAM, de modo que no hay acceso a disco. En nuestra
+máquina 2, \texttt{/dev/shm} dispone de 2{,}9~GB.
+
+La consecuencia práctica es que $X$ e $\mathbf{y}$ \textbf{no se replican}: existe una
+sola copia física, visible desde los $p$ procesos. Pero esto vale solo para los datos de
+entrada. Lo que sí se replica es todo lo que cada tarea \emph{construye}:
+
+\begin{equation}
+\underbrace{X}_{\text{241 MB, compartida}}
+\quad\longrightarrow\quad
+\underbrace{X^{(b)} = X[\texttt{indices}]}_{\text{241 MB, privada por worker}}
+\end{equation}
+
+La indexación con un arreglo de índices (\textit{fancy indexing}) siempre materializa un
+arreglo nuevo; no existe una vista que represente filas repetidas en orden arbitrario.
+De modo que con $p$ procesos el consumo de memoria crece aproximadamente como
+$241\,\text{MB} + p \times (241\,\text{MB} + \text{overhead del intérprete})$.
+
+Esta es exactamente la razón por la que la máquina 2, limitada a 6~GB bajo WSL, no puede
+ejecutar la versión de \texttt{scikit-learn} con $p = 6$: \texttt{lstsq} necesita, además
+de esa copia, espacio de trabajo interno para la SVD, y el sistema operativo termina el
+proceso. La variante con pesos de la Sección~\ref{sec:b-iteraciones} ataca precisamente
+este punto.
+
+% =====================================================================
+
+% =====================================================================
+\section{(e) Oversubscription y threads internos de NumPy}
+\label{sec:e}
+
+\subsection{Dos niveles de paralelismo superpuestos}
+
+El esquema tiene paralelismo en dos niveles simultáneos: $p$ procesos lanzados por
+\texttt{joblib}, y dentro de cada proceso, los threads que la biblioteca BLAS usa
+internamente para las operaciones matriciales. Si ambos niveles se configuran de forma
+independiente, el número total de threads activos es $p \times t$, y cuando ese producto
+supera el número de cores lógicos se produce \textbf{oversubscription}: más hilos listos
+para ejecutar que unidades de ejecución disponibles. El sistema operativo responde
+alternando entre ellos, lo que agrega cambios de contexto, invalidaciones de caché y
+contención por el ancho de banda de memoria, sin aportar paralelismo real.
+
+\subsection{Threads observados con \texttt{threadpool\_info()}}
+
+En la máquina 1, MKL reporta \textbf{4 threads por defecto} en el proceso padre, sobre 8
+cores lógicos. Tomado literalmente, ejecutar $p = 8$ procesos implicaría $8 \times 4 = 32$
+threads, una sobresuscripción de $4\times$. Sin embargo, al consultar
+\texttt{threadpool\_info()} \emph{desde dentro} de los workers la situación es distinta.
+
+\begin{lstlisting}[language=bash,caption={Salida de \texttt{bs\_numpy.py} con $p=8$ en la máquina 1.},basicstyle=\ttfamily\scriptsize]
+--- p=8, t=1 ---
+  worker 0: al arrancar [('mkl', 1)] -> dentro de threadpool_limits(1) [('mkl', 1)]
+  sin limitar: 8 procesos x 1 threads = 8 sobre 8 cores logicos
+--- p=8, t=2 ---
+  worker 0: al arrancar [('mkl', 1)] -> dentro de threadpool_limits(2) [('mkl', 2)]
+  con t=2: 8 procesos x 2 threads = 16 sobre 8 cores logicos  [OVERSUBSCRIPTION]
+--- p=8, t=4 ---
+  worker 0: al arrancar [('mkl', 1)] -> dentro de threadpool_limits(4) [('mkl', 4)]
+  con t=4: 8 procesos x 4 threads = 32 sobre 8 cores logicos  [OVERSUBSCRIPTION]
+\end{lstlisting}
+
+\paragraph{Hallazgo: joblib ya mitiga el problema por defecto.}
+Los workers \emph{no} arrancan con los 4 threads del padre, sino con 1. El backend
+\texttt{loky} fija automáticamente el número de threads internos a
+$\lfloor \text{cores lógicos} / p \rfloor = \lfloor 8/8 \rfloor = 1$, de modo que el
+producto $p \times t$ coincide exactamente con el número de cores. \textbf{No hay
+oversubscription espontánea.} Ésta aparece únicamente cuando se fuerza $t$ por encima de
+ese valor, como en las dos últimas configuraciones.
+
+\subsection{Efecto medido sobre el tiempo}
+
+\begin{table}[H]
+\centering
+\caption{Tiempo de \texttt{bs\_numpy} con $p = 8$ al forzar distintos valores de $t$.
+         Máquina 1, $B = 48$.}
+\label{tab:oversub}
+\small
+\begin{tabular}{crrr}
+\toprule
+$t$ & \textbf{Threads totales} & \textbf{Tiempo (s)} & \textbf{Penalización} \\
+\midrule
+1 & $8 \times 1 = 8$  & \textbf{12{,}91} & --- \\
+2 & $8 \times 2 = 16$ & 12{,}59 & $-2{,}5\%$ \\
+4 & $8 \times 4 = 32$ & 18{,}67 & $+44{,}6\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La sobresuscripción moderada ($t = 2$, factor $2\times$) es prácticamente inocua: el
+tiempo incluso baja un 2,5\%, dentro del ruido de medición. Esto tiene sentido en un
+procesador con \textit{hyperthreading}: los 8 cores lógicos corresponden a 4 físicos, de
+modo que parte de los hilos adicionales encuentra unidades de ejecución realmente libres.
+
+La sobresuscripción severa ($t = 4$, factor $4\times$), en cambio, cuesta un
+\textbf{44,6\% más de tiempo}. Con 32 hilos compitiendo por 8 cores lógicos, el
+planificador alterna constantemente entre ellos; cada cambio de contexto invalida las
+cachés privadas y obliga a recargar datos desde memoria, precisamente el recurso que ya
+era el cuello de botella.
+
+\paragraph{Cómo se corrige.} Limitando explícitamente los threads internos con
+\texttt{threadpool\_limits}, \textbf{dentro de la función que ejecuta cada worker}. Esto
+merece énfasis porque nuestra primera implementación lo hacía mal:
+
+\begin{lstlisting}[caption={Patrón incorrecto: el límite no llega a los workers.}]
+with threadpool_limits(limits=t, user_api='blas'):   # se aplica al proceso PADRE
+    Parallel(n_jobs=p)(delayed(tarea)(...) for b in range(B))
+\end{lstlisting}
+
+\texttt{threadpool\_limits} actúa sobre las bibliotecas BLAS \emph{ya cargadas en el
+proceso que lo invoca}. Los workers de \texttt{loky} son procesos independientes, que
+cargan su propia copia de la biblioteca y no heredan ese límite. El resultado es que el
+límite se aplicaba únicamente cuando $p = 1$ (caso en que \texttt{joblib} ejecuta en el
+propio proceso padre) y era completamente inefectivo para $p \geq 2$: todas las
+mediciones de la grilla $(p,t)$ obtenidas con ese patrón eran inválidas, porque no medían
+$t$ en absoluto.
+
+\begin{lstlisting}[caption={Patrón correcto: el límite se aplica en cada worker.}]
+def tarea(X, y, semilla, t):
+    with threadpool_limits(limits=t, user_api='blas'):   # se aplica al WORKER
+        ...
+\end{lstlisting}
+
+Una alternativa equivalente es \texttt{Parallel(n\_jobs=p, inner\_max\_num\_threads=t)}.
+Optamos por la primera porque permite, además, imprimir \texttt{threadpool\_info()} desde
+el interior del worker y así \emph{verificar} que el límite tuvo efecto, en lugar de
+suponerlo. Ese es el origen de la salida mostrada más arriba.
+
+\pendiente{\textbf{Faltan las capturas del Monitor del Sistema.} Es la única evidencia
+que el script no genera solo, y el enunciado la pide explícitamente. No hay que repetir la
+tanda completa: basta correr lo siguiente con el monitor abierto (${\sim}20$~s cada uno) y
+capturar la pantalla durante cada ejecución.
+
+\medskip
+\texttt{python src/bs\_numpy.py -p 1 -t 1}\\
+\texttt{python src/bs\_numpy.py -p 4 -t 1}\\
+\texttt{python src/bs\_numpy.py -p 8 -t 1}\\
+\texttt{python src/bs\_numpy.py -p 8 -t 4}
+
+\medskip
+Guardar la principal como \texttt{resultados/<máquina>/monitor\_sistema.png} y la figura de
+abajo la toma automáticamente. Lo que hay que comentar: con $p=1$ se ve un solo core
+saturado; con $p=8,\ t=1$ los ocho ocupados de forma pareja; y con $p=8,\ t=4$ los ocho
+\emph{igual} de ocupados pero con un $44{,}6\%$ más de tiempo. Ese último contraste es el
+punto del ítem: una CPU al 100\,\% no significa que esté rindiendo.}
+
+\begin{figure}[H]
+\centering
+\figurasiexiste{../resultados/DESKTOP-52S4V2O/monitor_sistema.png}{0.8\textwidth}%
+  {Captura del monitor del sistema durante la ejecución.}
+\caption{Actividad del sistema durante la ejecución de \texttt{bs\_numpy.py}.}
+\label{fig:monitor}
+\end{figure}
+
+% =====================================================================
+\section{(f) Tiempos de ejecución en función de $p$}
+\label{sec:f}
+
+Se ejecutaron las tres versiones con $p \in \{1, 2, \dots, 8\}$, donde $8$ es el número de
+cores lógicos de la máquina 1, con $t = 1$ thread interno por proceso.
+
+\begin{table}[H]
+\centering
+\caption{Tiempos de ejecución $T(p)$ en segundos. Máquina 1, $B = 48$, $t = 1$.
+         En negrita el mínimo de cada versión.}
+\label{tab:tiempos}
+\small
+\begin{tabular}{crrr}
+\toprule
+$p$ & \texttt{bs\_auto} & \texttt{bs\_sklearn} & \texttt{bs\_numpy} \\
+\midrule
+$T_{\text{serial}}$ & --- & 74{,}68 & 11{,}34 \\
+\midrule
+1 & \textbf{73{,}05} & 75{,}05 & 15{,}74 \\
+2 & 81{,}27 & 64{,}32 & 11{,}48 \\
+3 & 90{,}60 & \textbf{61{,}07} & \textbf{9{,}88} \\
+4 & 87{,}82 & 61{,}60 & 10{,}58 \\
+5 & 73{,}12 & 76{,}31 & 14{,}72 \\
+6 & 76{,}19 & 69{,}10 & 12{,}63 \\
+7 & 74{,}62 & 72{,}92 & 13{,}06 \\
+8 & 86{,}19 & 75{,}77 & 16{,}70 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\pendiente{Agregar la tabla equivalente para la máquina 2 y la figura comparativa.}
+
+Tres observaciones:
+
+\begin{enumerate}
+\item \texttt{bs\_numpy} es entre $5$ y $7$ veces más rápida que las otras dos para todo
+  $p$. La elección del método de ajuste domina por completo sobre la estrategia de
+  paralelización.
+\item Las tres versiones alcanzan su mínimo muy temprano, en $p = 3$ para
+  \texttt{bs\_sklearn} y \texttt{bs\_numpy}, y \emph{empeoran} al seguir agregando
+  procesos. En $p = 8$, \texttt{bs\_numpy} tarda más ($16{,}70$~s) que en $p = 1$
+  ($15{,}74$~s).
+\item La línea base secuencial de \texttt{bs\_numpy} ($11{,}34$~s) es \textbf{más rápida}
+  que $T(1)$ con \texttt{joblib} ($15{,}74$~s). No es una contradicción: la corrida
+  secuencial deja a MKL usar los 4 threads que trae por defecto, mientras que $T(1)$ se
+  midió con $t = 1$. La diferencia cuantifica lo que aporta el paralelismo \emph{interno}
+  de BLAS, y es mayor que todo lo que aporta el paralelismo de procesos.
+\end{enumerate}
+
+% =====================================================================
+\section{(g) Speedup y eficiencia}
+\label{sec:g}
+
+\begin{align}
+S(p) &= \frac{T(1)}{T(p)}, &
+E(p) &= \frac{S(p)}{p}
+\end{align}
+
+\subsection{Justificación de la elección de $T(1)$}
+
+Esta elección no es inocua y merece discusión explícita, porque determina por completo la
+forma de las curvas.
+
+Al medir $T(1)$ como \texttt{Parallel(n\_jobs=1)}, \texttt{joblib} \emph{no crea ningún
+proceso}: ejecuta las tareas secuencialmente en el propio proceso padre. Esa corrida no
+paga serialización, ni volcado a \texttt{memmap}, ni arranque de workers. En cambio, ya
+con $p = 2$ aparecen de golpe todos esos costos. Es decir, $T(1)$ y $T(p \geq 2)$
+\textbf{no miden el mismo experimento}, y usar el primero como referencia mezcla el costo
+de paralelizar con el de haber cambiado de régimen de ejecución.
+
+Por eso medimos dos líneas base distintas:
+
+\begin{description}
+\item[$T_{\text{serial}}$] --- un ciclo \texttt{for} sin \texttt{joblib}, con BLAS libre
+  para usar todos sus threads. Es la implementación secuencial \emph{más rápida
+  disponible}, y por lo tanto la referencia honesta: responde a ``¿cuánto gano respecto de
+  la mejor forma de resolver esto sin paralelismo de tareas?''.
+\item[$T(1)$] --- el backend paralelo con un solo proceso. Aísla el costo de
+  \emph{repartir} el trabajo, manteniendo fija la maquinaria de ejecución.
+\end{description}
+
+\textbf{Adoptamos $T_{\text{serial}}$} como referencia para $S(p)$ y $E(p)$. Es la elección
+más exigente y la más honesta: usar $T(1)$ produciría speedups artificialmente favorables
+para \texttt{bs\_numpy}, simplemente porque $T(1)$ está penalizado por $t = 1$. Para
+\texttt{bs\_auto} no existe línea base sin \texttt{joblib} --- \texttt{BaggingRegressor}
+siempre pasa por él, y \texttt{n\_jobs=1} \emph{es} su modo secuencial ---, de modo que en
+esa versión se usa necesariamente $T(1)$, y su columna no es estrictamente comparable con
+las otras dos.
+
+\subsection{Resultados}
+
+\begin{table}[H]
+\centering
+\caption{Speedup $S(p)$ y eficiencia $E(p)$. Máquina 1. Referencia:
+         $T_{\text{serial}}$ para \texttt{bs\_sklearn} y \texttt{bs\_numpy}, $T(1)$ para
+         \texttt{bs\_auto}.}
+\label{tab:speedup}
+\small
+\begin{tabular}{crrrrrr}
+\toprule
+& \multicolumn{2}{c}{\texttt{bs\_auto}} & \multicolumn{2}{c}{\texttt{bs\_sklearn}} & \multicolumn{2}{c}{\texttt{bs\_numpy}} \\
+$p$ & $S(p)$ & $E(p)$ & $S(p)$ & $E(p)$ & $S(p)$ & $E(p)$ \\
+\midrule
+1 & 1{,}00 & 1{,}00 & 1{,}00 & 1{,}00 & 0{,}72 & 0{,}72 \\
+2 & 0{,}90 & 0{,}45 & 1{,}16 & 0{,}58 & 0{,}99 & 0{,}49 \\
+3 & 0{,}81 & 0{,}27 & \textbf{1{,}22} & 0{,}41 & \textbf{1{,}15} & 0{,}38 \\
+4 & 0{,}83 & 0{,}21 & 1{,}21 & 0{,}30 & 1{,}07 & 0{,}27 \\
+5 & 1{,}00 & 0{,}20 & 0{,}98 & 0{,}20 & 0{,}77 & 0{,}15 \\
+6 & 0{,}96 & 0{,}16 & 1{,}08 & 0{,}18 & 0{,}90 & 0{,}15 \\
+7 & 0{,}98 & 0{,}14 & 1{,}02 & 0{,}15 & 0{,}87 & 0{,}12 \\
+8 & 0{,}85 & 0{,}11 & 0{,}99 & 0{,}12 & 0{,}68 & 0{,}08 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\figurasiexiste{../resultados/DESKTOP-52S4V2O/graficos_metricas.png}{\textwidth}%
+  {Generar con \texttt{python src/plot\_metrics.py}.}
+\caption{Tiempo $T(p)$, speedup $S(p)$ y eficiencia $E(p)$ para las tres versiones,
+         comparados con la curva ideal. Máquina 1.}
+\label{fig:metricas1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\figurasiexiste{../resultados/MAQUINA2/graficos_metricas.png}{\textwidth}%
+  {Reemplazar \texttt{MAQUINA2} por la etiqueta real de la segunda máquina.}
+\caption{Tiempo $T(p)$, speedup $S(p)$ y eficiencia $E(p)$. Máquina 2.}
+\label{fig:metricas2}
+\end{figure}
+
+\subsection{Comentario}
+
+El resultado central es contundente y conviene no maquillarlo: \textbf{el speedup máximo
+alcanzado es $1{,}22$}, con \texttt{bs\_sklearn} en $p = 3$. \texttt{bs\_numpy} llega a
+$1{,}15$, también en $p = 3$. Frente a la curva ideal $S(p) = p$, que en $p = 8$ predeciría
+un factor de 8, la ganancia real es esencialmente nula: \textbf{este problema no escala
+con el número de procesos en este hardware}.
+
+La eficiencia lo expresa con más crudeza. Cae por debajo de $0{,}5$ ya en $p = 2$ y termina
+en $0{,}08$--$0{,}12$ en $p = 8$: con ocho procesos se aprovecha cerca del 10\% de la
+capacidad agregada. Dicho de otro modo, siete de cada ocho procesos están efectivamente
+esperando.
+
+El comportamiento no-monótono (mínimo en $p = 3$, repunte en $p = 5$, nueva caída en
+$p = 8$) se explica por dos efectos superpuestos. Primero, la máquina tiene 4 cores
+\emph{físicos} y 8 lógicos: más allá de $p = 4$ los procesos empiezan a compartir unidades
+de ejecución vía \textit{hyperthreading}, lo que no duplica el rendimiento en un problema
+ya limitado por memoria. Segundo, la granularidad: con $B = 48$ tareas, el reparto es
+exacto solo cuando $p$ divide a 48, y para $p = 5$ o $p = 7$ el desbalance impone un techo
+adicional.
+
+Vale la pena notar que $S(1) = 0{,}72$ para \texttt{bs\_numpy}: con un solo proceso y
+$t = 1$ se es \emph{más lento} que la línea base secuencial, que usa 4 threads de BLAS. Es
+la consecuencia directa de haber elegido $T_{\text{serial}}$ como referencia, y deja ver
+que en este problema el paralelismo interno de BLAS rinde más que el de procesos.
+
+\pendiente{Repetir el comentario contrastando con la máquina 2, y verificar si el punto
+de saturación se mantiene en $p \approx 3$ o se desplaza al disponer de más cores.}
+
+% =====================================================================
+\section{(h) Overhead}
+\label{sec:h}
+
+El overhead total acumulado sobre los $p$ procesos se define como
+
+\begin{equation}
+T_o(p) = p \cdot T(p) - T(1),
+\end{equation}
+
+es decir, el trabajo total consumido por los $p$ procesos menos el trabajo útil que
+bastaría para resolver el problema secuencialmente. En el caso ideal $T(p) = T(1)/p$ y por
+lo tanto $T_o(p) = 0$.
+
+\begin{table}[H]
+\centering
+\caption{Overhead $T_o(p)$ en segundos-proceso. Máquina 1.}
+\label{tab:overhead}
+\small
+\begin{tabular}{crrr}
+\toprule
+$p$ & \texttt{bs\_auto} & \texttt{bs\_sklearn} & \texttt{bs\_numpy} \\
+\midrule
+1 &   0{,}0 &   0{,}4 &   4{,}4 \\
+2 &  89{,}5 &  54{,}0 &  11{,}6 \\
+3 & 198{,}8 & 108{,}5 &  18{,}3 \\
+4 & 278{,}2 & 171{,}7 &  31{,}0 \\
+5 & 292{,}5 & 306{,}9 &  62{,}2 \\
+6 & 384{,}1 & 339{,}9 &  64{,}5 \\
+7 & 449{,}3 & 435{,}8 &  80{,}1 \\
+8 & 616{,}5 & 531{,}4 & 122{,}2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\figurasiexiste{../resultados/DESKTOP-52S4V2O/grafico_overhead.png}{0.75\textwidth}%
+  {Generar con \texttt{python src/plot\_metrics.py}.}
+\caption{Overhead $T_o(p)$ en función del número de procesos. Máquina 1.}
+\label{fig:overhead}
+\end{figure}
+
+El overhead crece de forma \textbf{aproximadamente lineal en $p$} para las tres versiones,
+con pendiente creciente en el tramo final. Para \texttt{bs\_numpy} pasa de $11{,}6$ a
+$122{,}2$ segundos-proceso entre $p = 2$ y $p = 8$: un factor de $10{,}5$ mientras $p$ solo
+se cuadruplica. Un crecimiento estrictamente lineal indicaría un costo fijo por proceso
+(arranque, copia de datos); que crezca más rápido apunta a \emph{contención}, un costo que
+cada proceso adicional impone también sobre los ya existentes.
+
+\subsection{Fuentes de overhead en este esquema}
+
+Ordenadas por importancia estimada para este problema:
+
+\begin{enumerate}
+\item \textbf{Contención por ancho de banda de memoria.} Es, con diferencia, la fuente
+  dominante, y la evidencia la respalda por tres vías independientes: el speedup satura en
+  $1{,}22$; el overhead crece superlinealmente; y la variante con pesos
+  (Sección~\ref{sec:b-iteraciones}) no mejoró pese a optimizar el patrón de acceso. Cada
+  tarea recorre $X$ (241~MB) para construir $X^{(b)}$ y luego lo recorre otra vez para
+  calcular $X^{(b)\top}X^{(b)}$. Los cores comparten un único bus hacia la RAM: agregar
+  procesos agrega unidades de cómputo, pero \emph{no} agrega ancho de banda.
+
+\item \textbf{Materialización de $X^{(b)}$.} Cada worker asigna y llena 241~MB por
+  resample. Con $B = 48$ resamples eso son $\sim 11{,}6$~GB de tráfico de memoria por
+  corrida, únicamente para construir las muestras.
+
+\item \textbf{Presión sobre la caché compartida.} Con $p$ procesos coexisten $p$ copias
+  privadas de 241~MB, que se expulsan mutuamente de la caché L3 compartida. Esto degrada
+  el rendimiento de todos los procesos a la vez, y explica por qué el costo es
+  superlineal.
+
+\item \textbf{Desbalance de carga (granularidad).} Con $B = 48$ tareas el reparto es
+  perfecto solo cuando $p$ divide a 48. Para $p = 5$ algunos workers reciben 10 tareas y
+  otros 9, y el total lo fija el más cargado: la eficiencia máxima alcanzable cae a
+  $48/(10 \cdot 5) = 96\%$. Para $p = 7$ el techo es $48/(7 \cdot 7) = 98\%$. Este efecto
+  contribuye a la irregularidad de las curvas, aunque es menor frente a la contención.
+
+\item \textbf{Creación de procesos y transferencia de datos.} Arrancar los workers de
+  \texttt{loky} (intérpretes nuevos que reimportan NumPy y scikit-learn) y volcar $X$ a
+  \texttt{memmap} tiene un costo fijo, del orden de cientos de milisegundos. Es
+  \emph{constante} respecto de $B$, y por eso pesa mucho más en \texttt{bs\_numpy}
+  ($\sim 10$~s totales) que en las versiones de scikit-learn ($\sim 70$~s).
+
+\item \textbf{Oversubscription de threads.} Cuantificada en la Sección~\ref{sec:e}: un
+  $44{,}6\%$ de penalización con $t = 4$. Está controlada en estas mediciones ($t = 1$),
+  pero sería la fuente dominante si no se gestionara.
+
+\item \textbf{Hyperthreading.} Más allá de $p = 4$ (cores físicos) los procesos comparten
+  unidades de ejecución. En un problema limitado por memoria, el segundo hilo de cada core
+  aporta poco y compite por la misma caché.
+\end{enumerate}
+
+% =====================================================================
+\section{(i) Grilla de procesos y threads}
+\label{sec:i}
+
+Usando \texttt{bs\_numpy}, la versión más eficiente del ítem (b), se exploraron
+combinaciones $(p, t)$ sujetas a $p \cdot t \leq p_{\max}$, de modo de no exceder nunca el
+número de cores lógicos. Las combinaciones que violan esa restricción se excluyeron.
+
+\begin{table}[H]
+\centering
+\caption{Tiempo $T(p,t)$ en segundos. Máquina 1, $p_{\max} = 8$, $B = 48$.
+         Las celdas marcadas con --- violan $p \cdot t \leq 8$.}
+\label{tab:grid}
+\small
+\begin{tabular}{crrrr}
+\toprule
+& \multicolumn{4}{c}{\textbf{Procesos $p$}} \\
+\textbf{Threads $t$} & $1$ & $2$ & $4$ & $8$ \\
+\midrule
+1 & 17{,}31 & 13{,}50 & \textbf{11{,}10} & 12{,}70 \\
+2 & 13{,}68 & 11{,}14 & 11{,}75 & --- \\
+4 & 11{,}49 & 11{,}41 & --- & --- \\
+8 & 11{,}70 & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\figurasiexiste{../resultados/DESKTOP-52S4V2O/grid_heatmap.png}{0.75\textwidth}%
+  {Generar con \texttt{python src/run\_grid\_experiment.py}.}
+\caption{Tiempo de ejecución $T(p,t)$ para cada combinación válida. Máquina 1.}
+\label{fig:grid1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\figurasiexiste{../resultados/MAQUINA2/grid_heatmap.png}{0.75\textwidth}%
+  {Reemplazar \texttt{MAQUINA2} por la etiqueta real de la segunda máquina.}
+\caption{Tiempo de ejecución $T(p,t)$. Máquina 2.}
+\label{fig:grid2}
+\end{figure}
+
+\subsection{Conclusión}
+
+La mejor combinación es $\boldsymbol{(p, t) = (4, 1)}$, con $11{,}10$~s. Pero el hallazgo
+más interesante es \textbf{lo plana que resulta la superficie}: todas las configuraciones
+que saturan los 8 cores lógicos --- $(4,1)$, $(2,2)$, $(1,4)$, $(1,8)$, $(2,4)$ ---
+quedan entre $11{,}10$ y $11{,}75$~s, un rango de apenas $6\%$.
+
+Esto refuerza la interpretación de la Sección~\ref{sec:h}: si el recurso escaso fuera la
+capacidad de cómputo, la forma de repartirla entre procesos y threads importaría. Como el
+recurso escaso es el \emph{ancho de banda de memoria}, y ambos niveles de paralelismo
+compiten por el mismo bus, da casi igual cómo se distribuya el trabajo mientras se ocupen
+todos los cores.
+
+Las configuraciones claramente malas son las que \emph{no} saturan la máquina: $(1,1)$ con
+$17{,}31$~s es la peor de todas, usando un solo core. Y $(8,1)$ con $12{,}70$~s es un
+$14\%$ peor que $(4,1)$, consistente con que los 8 cores lógicos son solo 4 físicos.
+
+\paragraph{Compromiso entre los dos niveles.} El paralelismo de tareas (aumentar $p$) no
+requiere comunicación entre resamples, pero multiplica el uso de memoria: cada proceso
+mantiene su propia copia de $X^{(b)}$. El paralelismo de threads (aumentar $t$) comparte
+los datos dentro del proceso, pero escala mal en operaciones limitadas por ancho de banda.
+En esta máquina el óptimo cae en un punto intermedio con predominio de procesos, aunque la
+diferencia con las alternativas es marginal.
+
+\pendiente{Comparar con la grilla de la máquina 2 y verificar si el óptimo se mantiene en
+$t$ bajo o se desplaza al haber más cores disponibles.}
+
+% =====================================================================
+\section{(j) Comparación entre los dos computadores}
+\label{sec:j}
+
+\pendiente{Sección pendiente de la tanda de la máquina 2. La columna de la máquina 1 ya
+está completa; falta la segunda y el comentario.
+
+\medskip
+\textbf{Estructura sugerida.}
+
+\emph{1. Tabla comparativa:} $T_{\text{serial}}$, $T(p_{\max})$, mejor tiempo y a qué $p$,
+speedup máximo, eficiencia en $p_{\max}$, y mejor combinación $(p,t)$.
+
+\emph{2. Diferencias esperables y su justificación:}
+\begin{itemize}
+  \item \emph{Número de cores.} No debería traducirse en un speedup proporcional,
+    precisamente porque el problema está limitado por ancho de banda: más cores no
+    implican más ancho de banda hacia la RAM. Verificar si el punto de saturación
+    ($p \approx 3$ en la máquina 1) se desplaza o se mantiene.
+  \item \emph{Relación cores físicos / lógicos.} En la máquina 1 el quiebre en $p = 4$
+    coincide con el número de cores físicos. Comprobar si el mismo patrón aparece.
+  \item \emph{Biblioteca BLAS y su default de threads.} Comparar los tiempos con $p=1$,
+    que es donde el efecto de BLAS se aísla mejor.
+  \item \emph{Jerarquía de memoria.} Tamaño de L3 y número de canales de memoria explican
+    buena parte del punto de saturación.
+  \item \emph{Memoria disponible.} Con poca RAM, las versiones de scikit-learn no llegan a
+    $p$ alto: \texttt{lstsq} usa $\sim 1$~GB por proceso.
+\end{itemize}
+
+\emph{3. Anécdota de portabilidad.} \texttt{run\_grid\_experiment.py} contenía una
+f-string con una barra invertida, admitida en Python 3.12+ (PEP 701) pero que \emph{no
+compila} en 3.10. El código corría en una máquina y fallaba al importarse en la otra. Las
+diferencias entre entornos no se limitan al rendimiento.}
+
+% =====================================================================
+\section{Conclusiones}
+\label{sec:conclusiones}
+
+\begin{enumerate}
+\item \textbf{La optimización algorítmica superó ampliamente a la paralelización.}
+  Reemplazar la descomposición SVD de \texttt{lstsq} por la resolución directa de la
+  ecuación normal produjo una mejora de $\sim 6\times$ ($75$~s a $11$~s). Todo el
+  paralelismo de procesos, en cambio, aportó a lo sumo un factor $1{,}22$. Antes de
+  paralelizar conviene revisar el algoritmo.
+
+\item \textbf{El problema está limitado por ancho de banda de memoria, no por cómputo.}
+  Tres evidencias independientes convergen: el speedup satura en $p \approx 3$ con un
+  factor de apenas $1{,}22$; el overhead crece superlinealmente en $p$; y la superficie
+  $T(p,t)$ es esencialmente plana ($6\%$ de rango) entre todas las configuraciones que
+  ocupan los 8 cores. Con $k = 301$, la razón entre operaciones aritméticas y bytes
+  movidos es demasiado baja para que agregar procesos ayude.
+
+\item \textbf{No toda micro-optimización paga.} La variante que reemplaza el
+  \textit{fancy indexing} por pesos multinomiales, matemáticamente equivalente y con mejor
+  patrón de acceso, resultó un $24\%$ \emph{más lenta}. Lo que domina es el volumen de
+  datos movido, no el orden en que se accede.
+
+\item \textbf{Las tres implementaciones son correctas y equivalentes.}
+  \texttt{bs\_numpy} y \texttt{bs\_sklearn} coinciden hasta $8 \times 10^{-14}$ --- ruido
+  de redondeo --- porque comparten semilla y remuestrean las mismas filas.
+  \texttt{bs\_auto} difiere en $4{,}6 \times 10^{-3}$, del orden del propio ancho de los
+  intervalos, porque usa su generador interno: su equivalencia es estadística, no
+  numérica. Las cuatro cubren $\boldsymbol{\beta}^*$ en torno al $91\%$ de los
+  coeficientes, consistente con el $95\%$ nominal dado que $B = 48$ deja muy pocas
+  observaciones en cada cola.
+
+\item \textbf{Medir correctamente es parte del problema.} Dos decisiones metodológicas
+  cambiaron las conclusiones por completo: aplicar \texttt{threadpool\_limits} dentro del
+  worker y no en el proceso padre (sin lo cual la grilla del ítem (i) no medía nada), y
+  elegir una línea base secuencial honesta en lugar de $T(1)$ con \texttt{joblib} (que
+  infla los speedups). Ambas fueron errores de nuestra primera implementación, detectados
+  al verificar que las mediciones dijeran lo que creíamos.
+\end{enumerate}
+
+\pendiente{Revisar y ampliar con las conclusiones que surjan de la comparación entre
+máquinas (ítem j).}
+
+% =====================================================================
+\section*{Declaración de uso de inteligencia artificial}
+\addcontentsline{toc}{section}{Declaración de uso de inteligencia artificial}
+
+\pendiente{Revisar y ajustar esta declaración para que refleje con exactitud el uso que el
+grupo le dio a herramientas de IA. El texto siguiente es una base.}
+
+En la realización de esta tarea se utilizó el asistente de programación \textbf{Claude
+Code} (Anthropic), con los siguientes propósitos:
+
+\begin{itemize}
+\item \textbf{Revisión de código.} Identificación de errores en la implementación
+  original, en particular: la aplicación incorrecta de \texttt{threadpool\_limits} en el
+  proceso padre en lugar de en los workers (Sección~\ref{sec:e}); la ausencia de
+  \texttt{random\_state} en \texttt{BaggingRegressor}, que impedía la reproducibilidad
+  (Sección~\ref{sec:c}); el incumplimiento de la restricción $p \cdot t \leq p_{\max}$ en
+  la grilla del ítem (i); y la ausencia de una línea base secuencial para el cálculo del
+  speedup (Sección~\ref{sec:g}).
+\item \textbf{Refactorización.} Parametrización de los scripts, separación de resultados
+  por máquina y automatización de la tanda de experimentos.
+\item \textbf{Redacción.} Estructuración y redacción de este informe a partir de los
+  resultados experimentales obtenidos por el grupo.
+\end{itemize}
+
+El diseño experimental, la ejecución de las mediciones en ambos computadores y la
+interpretación de los resultados fueron realizados por los integrantes del grupo. Todo el
+código fue revisado y verificado por el grupo antes de su uso.
+
+\end{document}

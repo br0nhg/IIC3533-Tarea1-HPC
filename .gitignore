@@ -3,3 +3,11 @@ __pycache__/
 tareal-hpc/
 .venv/
 .vscode/
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+informe/informe.pdf

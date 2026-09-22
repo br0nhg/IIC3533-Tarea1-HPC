@@ -77,6 +77,24 @@ paso () {
     echo "[duración: $((SECONDS - t0)) s]"
 }
 
+# paso_opcional: registra el fallo pero NO aborta la tanda. Se usa en los pasos
+# pesados, que pueden morir por falta de memoria con p alto y que de todos modos
+# guardan resultados parciales.
+paso_opcional () {
+    echo
+    echo "########################################################################"
+    echo "# $1"
+    echo "########################################################################"
+    shift
+    local t0=$SECONDS
+    if ! "$@"; then
+        echo "!!! Este paso falló, pero la tanda CONTINÚA."
+        echo "!!! Causa más probable: falta de memoria con p alto."
+        echo "!!! Los resultados parciales ya quedaron guardados."
+    fi
+    echo "[duración: $((SECONDS - t0)) s]"
+}
+
 # (c) correctitud y reproducibilidad
 paso "(c) Verificación de correctitud y reproducibilidad" \
     $PY $SRC/verificar_correctitud.py $PRUEBA
@@ -101,11 +119,11 @@ paso "(b) bs_numpy con pesos (variante optimizada)" \
     $PY $SRC/bs_numpy.py -p "$PMAX" -t 1 --pesos $PRUEBA
 
 # (f)(g)(h) benchmark de las tres versiones
-paso "(f)(g)(h) Benchmark p = 1..$PMAX de las tres versiones" \
+paso_opcional "(f)(g)(h) Benchmark p = 1..$PMAX de las tres versiones" \
     $PY $SRC/run_experiments.py $PRUEBA
 
 # (i) grilla (p, t)
-paso "(i) Grilla (p, t) con p*t <= $PMAX" \
+paso_opcional "(i) Grilla (p, t) con p*t <= $PMAX" \
     $PY $SRC/run_grid_experiment.py $PRUEBA
 
 # (g)(h) gráficos
