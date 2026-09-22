@@ -3,7 +3,7 @@
 ## Qué es esto
 
 Tarea 1 de **IIC3533 · Computación de Alto Rendimiento · 2026-2** (PUC).
-Enunciado: [tarea01.pdf](tarea01.pdf). Entrega: **viernes 25 de septiembre de 2026, 23:59**, vía Canvas, en **formato PDF**.
+Enunciado: [tarea01.pdf](enunciado/tarea01.pdf). Entrega: **viernes 25 de septiembre de 2026, 23:59**, vía Canvas, en **formato PDF**.
 
 Tema: **bootstrapping paralelo para regresión lineal OLS** usando `joblib` (paralelismo de tareas).
 Trabajo en grupo de tres personas. **Los experimentos deben correrse en al menos dos computadores distintos.**
@@ -25,15 +25,15 @@ Trabajo en grupo de tres personas. **Los experimentos deben correrse en al menos
 | Archivo | Rol | Ítem del enunciado |
 |---|---|---|
 | [correr_todo.sh](correr_todo.sh) | corre la tanda completa y deja todo en `resultados/<máquina>/terminal.txt` | todos |
-| [config.py](config.py) | etiqueta de máquina, cores lógicos, carpetas de salida, descripción del entorno | infraestructura |
-| [data_utils.py](data_utils.py) | genera `X`, `y`, `beta_star` con semilla fija (42) | (a) |
-| [bs_auto.py](bs_auto.py) | `BaggingRegressor` de sklearn con `n_jobs=p` | (b) |
-| [bs_sklearn.py](bs_sklearn.py) | `joblib.Parallel` + `LinearRegression` | (b) |
-| [bs_numpy.py](bs_numpy.py) | `joblib.Parallel` + ecuación normal; incluye variante con pesos y el diagnóstico de threads | (b), (e) |
-| [verificar_correctitud.py](verificar_correctitud.py) | compara los intervalos de las tres versiones, la equivalencia numérica y la reproducibilidad | (c) |
-| [run_experiments.py](run_experiments.py) | benchmark de las 3 versiones para p = 1..p_máx, más líneas base secuenciales | (f), (g) |
-| [plot_metrics.py](plot_metrics.py) | gráficos T(p), S(p), E(p) y overhead To(p) | (g), (h) |
-| [run_grid_experiment.py](run_grid_experiment.py) | grilla (p, t) con `p·t ≤ p_máx` → `grid_heatmap.png` | (i) |
+| [config.py](src/config.py) | etiqueta de máquina, cores lógicos, carpetas de salida, descripción del entorno | infraestructura |
+| [data_utils.py](src/data_utils.py) | genera `X`, `y`, `beta_star` con semilla fija (42) | (a) |
+| [bs_auto.py](src/bs_auto.py) | `BaggingRegressor` de sklearn con `n_jobs=p` | (b) |
+| [bs_sklearn.py](src/bs_sklearn.py) | `joblib.Parallel` + `LinearRegression` | (b) |
+| [bs_numpy.py](src/bs_numpy.py) | `joblib.Parallel` + ecuación normal; incluye variante con pesos y el diagnóstico de threads | (b), (e) |
+| [verificar_correctitud.py](src/verificar_correctitud.py) | compara los intervalos de las tres versiones, la equivalencia numérica y la reproducibilidad | (c) |
+| [run_experiments.py](src/run_experiments.py) | benchmark de las 3 versiones para p = 1..p_máx, más líneas base secuenciales | (f), (g) |
+| [plot_metrics.py](src/plot_metrics.py) | gráficos T(p), S(p), E(p) y overhead To(p) | (g), (h) |
+| [run_grid_experiment.py](src/run_grid_experiment.py) | grilla (p, t) con `p·t ≤ p_máx` → `grid_heatmap.png` | (i) |
 | `resultados/<máquina>/` | salidas por máquina: `.npy`, `.json`, `.png`, logs | (j) |
 | [resultados/bruno/terminal.txt](resultados/bruno/terminal.txt) | log crudo de la sesión de la máquina 1 | evidencia |
 
@@ -76,23 +76,23 @@ Detecta `python`/`python3`, chequea dependencias, aborta al primer fallo y regis
 Scripts sueltos:
 
 ```bash
-python config.py                # muestra el entorno detectado y dónde irán las salidas
-python data_utils.py            # verificación de formas
+python src/config.py                # muestra el entorno detectado y dónde irán las salidas
+python src/data_utils.py            # verificación de formas
 
 # corridas sueltas (todas aceptan -p, -B, -t, -N, -k)
-python bs_auto.py -p 8
-python bs_sklearn.py -p 8 -t 1
-python bs_numpy.py -p 8 -t 1            # imprime los threads vistos dentro de los workers
-python bs_numpy.py -p 8 --pesos         # variante optimizada, sin copiar X
+python src/bs_auto.py -p 8
+python src/bs_sklearn.py -p 8 -t 1
+python src/bs_numpy.py -p 8 -t 1            # imprime los threads vistos dentro de los workers
+python src/bs_numpy.py -p 8 --pesos         # variante optimizada, sin copiar X
 
-python verificar_correctitud.py         # evidencia del ítem (c)
-python run_experiments.py               # benchmark p = 1..p_máx (usa os.cpu_count())
-python plot_metrics.py                  # gráficos; --t1-paralelo cambia la línea base
-python run_grid_experiment.py           # grilla (p, t) con p·t ≤ p_máx
+python src/verificar_correctitud.py         # evidencia del ítem (c)
+python src/run_experiments.py               # benchmark p = 1..p_máx (usa os.cpu_count())
+python src/plot_metrics.py                  # gráficos; --t1-paralelo cambia la línea base
+python src/run_grid_experiment.py           # grilla (p, t) con p·t ≤ p_máx
 ```
 
 Pruebas rápidas sin gastar media hora: `-N 5000 -k 20 -B 8`.
-Para comparar máquinas: `python plot_metrics.py --maquina bruno`.
+Para comparar máquinas: `python src/plot_metrics.py --maquina bruno`.
 
 Matplotlib ya usa el backend `Agg` en los scripts de gráficos; sin eso, WSL falla con `qt.qpa.plugin: Could not load the Qt platform plugin "xcb"`.
 
