@@ -24,6 +24,7 @@ Trabajo en grupo de tres personas. **Los experimentos deben correrse en al menos
 
 | Archivo | Rol | Ítem del enunciado |
 |---|---|---|
+| [correr_todo.sh](correr_todo.sh) | corre la tanda completa y deja todo en `resultados/<máquina>/terminal.txt` | todos |
 | [config.py](config.py) | etiqueta de máquina, cores lógicos, carpetas de salida, descripción del entorno | infraestructura |
 | [data_utils.py](data_utils.py) | genera `X`, `y`, `beta_star` con semilla fija (42) | (a) |
 | [bs_auto.py](bs_auto.py) | `BaggingRegressor` de sklearn con `n_jobs=p` | (b) |
@@ -58,11 +59,21 @@ El contraste MKL/8 cores vs OpenBLAS/24 cores es exactamente el material del ít
 
 ### Bloqueador de memoria en la máquina 2
 
-Con 6 GB, correr `p` procesos donde cada worker materializa `X_b` (240 MB) + `y_b` + el producto intermedio es inviable para `p` alto: alrededor de p ≥ 12–16 se llega a swap u OOM. Antes de ejecutar acá hay que **subir `memory` en `.wslconfig` a 24–32 GB y reiniciar WSL** (`wsl --shutdown` desde PowerShell), o el benchmark de p = 1..24 no termina.
+Con 6 GB, correr `p` procesos donde cada worker materializa `X_b` (240 MB) + `y_b` + el producto intermedio es inviable para `p` alto: alrededor de p ≥ 12–16 se llega a swap u OOM. Antes de ejecutar acá hay que **subir `memory` en `.wslconfig` a 12 GB y reiniciar WSL** (`wsl --shutdown` desde PowerShell), o el benchmark de p = 1..24 no termina.
 
 `joblib` con el backend loky hace *memmap* automático de arreglos > 1 MB en `/dev/shm`, así que `X` se comparte sin replicarse; lo que no se comparte es la copia por resample.
 
 ## Cómo ejecutar
+
+La forma normal de ejecutar es la tanda completa:
+
+```bash
+bash correr_todo.sh --prueba    # ~1 min, verifica que el entorno funciona
+bash correr_todo.sh             # tanda real (~35 min con 8 cores)
+```
+
+Detecta `python`/`python3`, chequea dependencias, aborta al primer fallo y registra todo.
+Scripts sueltos:
 
 ```bash
 python config.py                # muestra el entorno detectado y dónde irán las salidas
@@ -112,6 +123,6 @@ joblib/loky **ya mitiga parcialmente el oversubscription** por su cuenta: fija `
 
 Estado detallado en [resumen.md](resumen.md). En una línea: **el código ya está corregido; falta subir la memoria de WSL, correr todo en la máquina 2 y escribir el informe PDF.**
 
-⚠️ Antes de ejecutar acá: subir `memory` en `.wslconfig` a 24–32 GB y hacer `wsl --shutdown`. Con los 6 GB actuales, `p = 24` no cabe.
+⚠️ Antes de ejecutar acá: subir `memory` en `.wslconfig` a 12 GB y hacer `wsl --shutdown`. El pico medido para `p = 24` es ~9.4 GB; con los 6 GB actuales no cabe, con 12 GB sí. El host tiene 16 GB.
 
 El enunciado permite el uso de IA **siempre que se declare en el informe**. Hay que incluir esa declaración.

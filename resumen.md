@@ -125,7 +125,7 @@ Correr en la máquina 2 habría sobrescrito los de la máquina 1, que el ítem (
 ### 3.9 🔴 PENDIENTE — Límite de memoria de WSL en la máquina 2
 `/mnt/c/Users/benja/.wslconfig` fija `memory=6GB`. Cada worker materializa `X_b = X[indices]`, 240 MB, más el temporal del producto. Con 24 workers eso supera de lejos los 6 GB: swap u OOM.
 
-**Esto no se arregla desde el repo.** Hay que editar `.wslconfig` (subir `memory` a 24–32 GB) y hacer `wsl --shutdown` desde PowerShell. Es el único bloqueador que queda para ejecutar acá.
+**Esto no se arregla desde el repo.** Hay que editar `.wslconfig` (subir `memory` a 12 GB) y hacer `wsl --shutdown` desde PowerShell. Es el único bloqueador que queda para ejecutar acá.
 
 ### 3.10 ✅ Incompatibilidad Python 3.13 vs 3.10 (encontrada al ejecutar)
 `run_grid_experiment.py` tenía `f"{'t \\ p':<8} | "`. Python 3.13 (máquina 1) lo acepta desde PEP 701; **Python 3.10 (máquina 2) ni siquiera compila el archivo**. El script simplemente no corría acá. **Corregido** armando el label fuera de la f-string.
@@ -171,16 +171,15 @@ Usa **los mismos índices** que la versión original, así que el resultado coin
 
 ## 5. Pendientes para cerrar la tarea
 
-### Ejecución en la máquina 2 (esta)
-- [ ] **Subir `memory` en `.wslconfig` a 24–32 GB + `wsl --shutdown`** ← único bloqueador
-- [ ] `python config.py` para dejar registrado el entorno
-- [ ] `python verificar_correctitud.py` con los parámetros reales (N=100000, k=300, B=48)
-- [ ] `python run_experiments.py` con p = 1..24
-- [ ] `python run_grid_experiment.py` (grilla ya restringida a `p·t ≤ 24`)
-- [ ] `python bs_numpy.py -p 24 -t 1` observando el Monitor del Sistema (ítem e)
-- [ ] Comparar `--pesos` contra la versión con índices en la corrida completa (ítem b)
-- [ ] `python plot_metrics.py`
-- [ ] Guardar el log de la sesión en `resultados/<máquina>/terminal.txt`
+### Ejecución en la máquina 2
+
+Todo está automatizado en [correr_todo.sh](correr_todo.sh):
+
+- [ ] **Subir `memory` en `.wslconfig` a 12 GB + `wsl --shutdown`** ← único bloqueador (pico medido para p=24: ~9.4 GB; el host tiene 16 GB)
+- [ ] `bash correr_todo.sh --prueba` para validar el entorno (~1 min)
+- [ ] `bash correr_todo.sh` para la tanda real
+- [ ] Sacar captura del Monitor del Sistema durante la parte del ítem (e) (el script avisa cuándo)
+- [ ] Entregar la carpeta `resultados/<máquina>/` completa
 
 **Nota sobre el entorno:** esta máquina usa Python 3.10 del sistema con OpenBLAS; la máquina 1 usa conda con Python 3.13 y MKL. **No homogeneizar** — esa diferencia es el contenido del ítem (j).
 
